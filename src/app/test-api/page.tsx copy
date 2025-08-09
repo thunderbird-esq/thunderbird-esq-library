@@ -1,0 +1,133 @@
+// src/app/test-api/page.tsx
+
+'use client';
+
+import { useState } from 'react';
+// Re-added askModel to the imports
+import { askModel, fetchAndChunkText, generateEmbeddingsAndStore, searchInternetArchive } from '@/app/actions';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+export default function TestApiPage() {
+  const [topic, setTopic] = useState('the germ theory');
+  // Re-added state for the AI response
+  const [aiResponse, setAiResponse] = useState('');
+  const [archiveResults, setArchiveResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [ingestingDocId, setIngestingDocId] = useState<string | null>(null);
+
+  // Re-added the handler for the Ask AI button
+  const handleAskModel = async () => {
+    setLoading(true);
+    setAiResponse('');
+    const response = await askModel(topic);
+    setAiResponse(response);
+    setLoading(false);
+  };
+
+  const handleSearch = async () => {
+    setLoading(true);
+    setArchiveResults([]);
+    const results = await searchInternetArchive(topic);
+    setArchiveResults(results);
+    setLoading(false);
+  };
+
+  const handleIngest = async (documentId: string, title: string) => {
+    setIngestingDocId(documentId);
+    console.log(`Starting ingestion for ${documentId}...`);
+    
+    console.log("Step 1: Fetching and chunking text...");
+    const chunks = await fetchAndChunkText(documentId);
+    if (chunks.length === 0) {
+      alert("Failed to fetch or chunk document. See console for details.");
+      setIngestingDocId(null);
+      return;
+    }
+    console.log(`Step 1 complete. Found ${chunks.length} chunks.`);
+
+    console.log("Step 2: Generating embeddings and storing...");
+    const result = await generateEmbeddingsAndStore(chunks, documentId, title);
+    if (result.success) {
+      alert(`Successfully ingested "${title}"!`);
+      console.log("Step 2 complete. Ingestion successful.");
+    } else {
+      alert(`Failed to ingest "${title}". See console for details.`);
+      console.error("Step 2 failed.", result.error);
+    }
+    
+    setIngestingDocId(null);
+  };
+
+  return (
+    <div className="container mx-auto p-4 sm:p-8">
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>🧪 Comprehensive Test Page</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-4">
+            <Input
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Enter a topic..."
+              disabled={loading || ingestingDocId !== null}
+            />
+            <div className="flex flex-col gap-2">
+              <Button type="button" onClick={handleAskModel} disabled={loading || ingestingDocId !== null}>
+                {loading ? 'Thinking...' : 'Test Ask AI'}
+              </Button>
+              <Button type="button" variant="secondary" onClick={handleSearch} disabled={loading || ingestingDocId !== null}>
+                {loading ? 'Searching...' : 'Test Document Search'}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {aiResponse && (
+        <Card className="max-w-2xl mx-auto mt-6">
+          <CardHeader>
+            <CardTitle>🤖 AI Response</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap font-mono text-sm">{aiResponse}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {archiveResults.length > 0 && (
+        <Card className="max-w-2xl mx-auto mt-6">
+          <CardHeader>
+            <CardTitle>📚 Document Ingestion</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Click "Ingest" to process a document and add it to your database.
+            </p>
+            <ul className="flex flex-col gap-3">
+              {archiveResults.map((doc) => (
+                <li key={doc.identifier} className="p-3 border rounded-md flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold">{doc.title || 'Untitled'}</p>
+                    <p className="text-xs text-muted-foreground">{doc.creator || 'Unknown Author'} ({doc.date ? new Date(doc.date).getFullYear() : 'N/A'})</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleIngest(doc.identifier, doc.title)}
+                    disabled={ingestingDocId !== null}
+                  >
+                    {ingestingDocId === doc.identifier ? 'Ingesting...' : 'Ingest'}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
