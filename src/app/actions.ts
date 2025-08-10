@@ -1,48 +1,141 @@
 // src/app/actions.ts
-
 'use server';
 
-import { HfInference } from '@huggingface/inference';
-import * as cheerio from 'cheerio';
-
-// Initialize the Hugging Face Inference client with your API key
-const hf = new HfInference(process.env.HUGGING_FACE_API_KEY);
+import { ActionResult } from './types';
+import * as ai from '@/lib/ai/huggingface';
 
 /**
- * Sends a prompt to a Hugging Face chat model and returns the response.
- * @param prompt The user's question or prompt.
- * @returns The AI model's response text.
+ * Processes a raw text string that has already been downloaded by the client.
+ * @param rawText The raw string content of the document.
+ * @returns An ActionResult with the chunks or an error.
  */
-export async function askModel(prompt: string) {
+export async function processRawText(rawText: string): Promise<ActionResult<string[]>> {
   try {
-    const response = await hf.chatCompletion({
-      model: 'mistralai/Mistral-7B-Instruct-v0.2',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 500,
-    }, {
-      provider: 'featherless-ai' // Force specific provider
-    });
+    if (rawText.length < 100) {
+      return { success: false, error: 'Downloaded text is too short to be useful.' };
+    }
 
-    const modelResponse =
-      response.choices[0].message?.content || 'Sorry, I could not get a response.';
-    return modelResponse;
+    const cleanedText = rawText.replace(/-\n/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const chunkSize = 500;
+    const chunkOverlap = 50;
+    const words = cleanedText.split(' ');
+    const chunks: string[] = [];
+    for (let i = 0; i < words.length; i += chunkSize - chunkOverlap) {
+      chunks.push(words.slice(i, i + chunkSize).join(' '));
+    }
+    
+    return { success: true, data: chunks };
+
   } catch (error) {
-    console.error('Error calling Hugging Face API:', error);
-    return 'There was an error communicating with the AI model. Please check the server logs.';
+    console.error('Error in Raw Text processing:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown text processing error.';
+    return { success: false, error: errorMessage };
   }
 }
 
 /**
- * Searches the Internet Archive for texts related to a topic.
- * @param topic The topic to search for.
- * @returns A list of documents found.
+ * Processes a PDF that has already been downloaded by the client.
+ * @param buffer An ArrayBuffer of the PDF file data.
+ * @returns An ActionResult with the chunks or an error.
  */
-export async function searchInternetArchive(topic: string) {
+export async function processArrayBuffer(buffer: ArrayBuffer): Promise<ActionResult<string[]>> {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+    const pdfDoc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+    let rawText = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => ('str' in item ? item.str : '')).join(' ');
+      rawText += pageText + '\n\n';
+    }
+
+    if (!rawText) {
+      return { success: false, error: 'Could not extract any text from the PDF.' };
+    }
+
+    const cleaningPrompt = `
+      The following text was extracted from a PDF. Clean it up by fixing paragraph breaks, 
+      correcting obvious OCR errors, and removing headers/footers. Return ONLY the cleaned text.
+      RAW TEXT: --- ${rawText.substring(0, 4000)} ---
+    `;
+    const cleanedText = await ai.chat(cleaningPrompt);
+
+    const chunkSize = 500;
+    const chunkOverlap = 50;
+    const words = cleanedText.split(/\s+/);
+    const chunks: string[] = [];
+    for (let i = 0; i < words.length; i += chunkSize - chunkOverlap) {
+      chunks.push(words.slice(i, i + chunkSize).join(' '));
+    }
+    
+    return { success: true, data: chunks };
+
+  } catch (error) {
+    console.error('Error in ArrayBuffer processing:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown PDF processing error.';
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Generates embeddings for text chunks and stores them in Supabase in batches.
+ * @param chunks The array of text chunks.
+ * @param documentId The identifier of the source document.
+ * @param title The title of the source document.
+ * @returns An ActionResult indicating success or failure.
+ */
+export async function generateEmbeddingsAndStore(
+  chunks: string[],
+  documentId: string,
+  title: string
+): Promise<ActionResult<number>> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  const BATCH_SIZE = 100;
+
+  try {
+    const documentsToInsert = [];
+    for (const chunk of chunks) {
+      const embedding = await ai.embed(chunk);
+      documentsToInsert.push({
+        document_id: documentId,
+        title: title,
+        content: chunk,
+        embedding: JSON.stringify(embedding),
+      });
+    }
+
+    for (let i = 0; i < documentsToInsert.length; i += BATCH_SIZE) {
+      const batch = documentsToInsert.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('documents').insert(batch);
+      if (error) throw new Error(`Supabase insert failed: ${error.message}`);
+    }
+
+    return { success: true, data: documentsToInsert.length };
+  } catch (error) {
+    console.error('Error storing embeddings:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Searches the Internet Archive for texts related to a topic, including file format data.
+ * @param topic The topic to search for.
+ * @returns An ActionResult containing an array of documents or an error.
+ */
+export async function searchInternetArchive(topic: string): Promise<ActionResult<any[]>> {
+  if (!topic) {
+    return { success: false, error: 'Search topic cannot be empty.' };
+  }
   const searchUrl = 'https://archive.org/advancedsearch.php';
   const query = `(title:("${topic}") OR subject:("${topic}") OR description:("${topic}")) AND mediatype:(texts)`;
   const params = new URLSearchParams({
     q: query,
-    'fl[]': 'identifier,title,creator,date',
+    'fl[]': 'identifier,title,creator,date,format',
     rows: '20',
     page: '1',
     output: 'json',
@@ -54,222 +147,77 @@ export async function searchInternetArchive(topic: string) {
       throw new Error(`API call failed with status: ${response.status}`);
     }
     const data = await response.json();
-    return data.response.docs;
+    return { success: true, data: data.response.docs };
   } catch (error) {
     console.error('Error searching Internet Archive:', error);
-    return [];
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: `Internet Archive search failed: ${errorMessage}` };
   }
 }
 
 /**
- * Fetches the full text of a document from the Internet Archive and splits it into chunks.
- * This definitive version uses the Internet Archive's metadata API and a prioritized search
- * to find the most reliable plain text file available.
- * @param documentId The identifier of the Internet Archive document.
- * @returns An array of text chunks.
+ * Sends a prompt to the configured AI chat model.
+ * @param prompt The user's question or prompt.
+ * @returns An ActionResult containing the AI's response string or an error.
  */
-export async function fetchAndChunkText(documentId: string) {
+export async function askModel(prompt: string): Promise<ActionResult<string>> {
+  if (!prompt) {
+    return { success: false, error: 'Prompt cannot be empty.' };
+  }
   try {
-    // Step 1: Call the metadata API for the specific item
-    console.log(`Fetching metadata for ${documentId}...`);
-    const metadataUrl = `https://archive.org/metadata/${documentId}`;
-    const metadataResponse = await fetch(metadataUrl);
-    if (!metadataResponse.ok) {
-      throw new Error('Failed to fetch metadata.');
-    }
-    const metadata = await metadataResponse.json();
-
-    const availableFormats = metadata.files.map((f: any) => ({ name: f.name, format: f.format }));
-    console.log('Available file formats:', availableFormats);
-
-    // Step 2: Find a plain text file using a prioritized search
-    let textFile;
-
-    // Priority 1: Look for a file explicitly marked with format "Text". This is the gold standard.
-    textFile = metadata.files.find((file: any) => file.format === 'Text');
-
-    // Priority 2: If none, look for a non-DjVu .txt file.
-    if (!textFile) {
-      console.log("No 'Text' format found. Looking for other .txt files...");
-      textFile = metadata.files.find((file: any) =>
-        file.name.endsWith('.txt') && file.format !== 'DjVuTXT'
-      );
-    }
-
-    // Priority 3: If still none, fall back to the DjVuTXT file as a last resort.
-    if (!textFile) {
-      console.log("No other .txt files found. Falling back to DjVuTXT...");
-      textFile = metadata.files.find((file: any) => file.format === 'DjVuTXT');
-    }
-
-    if (!textFile) {
-      throw new Error('No suitable text file found in document metadata after prioritized search.');
-    }
-
-    const fileName = textFile.name;
-    const downloadUrl = `https://archive.org/download/${documentId}/${fileName}`;
-    
-    // Step 3: Download the content from the direct file URL
-    console.log(`Best file found: '${fileName}' (Format: ${textFile.format}). Downloading from: ${downloadUrl}`);
-    const textResponse = await fetch(downloadUrl);
-    if (!textResponse.ok) {
-      throw new Error(`Failed to download text file from ${downloadUrl}`);
-    }
-    const rawText = await textResponse.text();
-
-    if (rawText.length < 100) {
-        throw new Error('Downloaded text file is too short to be useful.');
-    }
-    
-    console.log('Successfully downloaded raw text content.');
-
-    // Step 3.5: Clean the text
-    const cleanedText = rawText
-      .replace(/-\n/g, '') // Rejoin words broken by a hyphen and a newline
-      .replace(/\n/g, ' ') // Replace all other newlines with a space
-      .replace(/\s+/g, ' ') // Collapse multiple whitespace characters into a single space
-      .trim();
-    
-    console.log('Successfully cleaned text content.');
-
-    // Step 4: Chunk the CLEAN text
-    const chunkSize = 500;
-    const chunkOverlap = 50;
-    const words = cleanedText.split(' '); // Split by single space
-    const chunks: string[] = [];
-    for (let i = 0; i < words.length; i += chunkSize - chunkOverlap) {
-      const chunk = words.slice(i, i + chunkSize).join(' ');
-      chunks.push(chunk);
-    }
-    console.log(
-      `Successfully chunked document ${documentId} into ${chunks.length} chunks.`
-    );
-    return chunks;
-    
+    const modelResponse = await ai.chat(prompt);
+    return { success: true, data: modelResponse };
   } catch (error) {
-    console.error('Error in API-driven fetch/chunk process:', error);
-    return [];
+    console.error('Error in askModel:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: `AI model request failed: ${errorMessage}` };
   }
 }
 
 /**
- * Generates embeddings for text chunks and stores them in the Supabase database.
- * @param chunks The array of text chunks.
- * @param documentId The identifier of the source document.
- * @param title The title of the source document.
- */
-export async function generateEmbeddingsAndStore(
-  chunks: string[],
-  documentId: string,
-  title: string
-) {
-  const { createClient } = await import('@/lib/supabase/server');
-  const supabase = await createClient();
-
-  try {
-    const embeddingModel = 'sentence-transformers/all-MiniLM-L6-v2';
-    
-    const documentsToInsert = [];
-
-    for (const chunk of chunks) {
-      const embeddingResponse = await hf.featureExtraction({
-        model: embeddingModel,
-        inputs: chunk,
-      }, {
-        provider: 'featherless-ai' // Force specific provider
-      });
-
-      const embedding = embeddingResponse as number[];
-
-      if (embedding) {
-        documentsToInsert.push({
-          document_id: documentId,
-          title: title,
-          content: chunk,
-          embedding: JSON.stringify(embedding),
-        });
-      } else {
-        console.warn(
-          `Could not generate embedding for chunk: ${chunk.substring(0, 50)}...`
-        );
-      }
-    }
-
-    if (documentsToInsert.length > 0) {
-      const { error } = await supabase.from('documents').insert(documentsToInsert);
-      if (error) {
-        throw error;
-      }
-    }
-
-    console.log(
-      `Successfully prepared to insert ${documentsToInsert.length} chunks from ${documentId}.`
-    );
-    return { success: true };
-    
-  } catch (error) {
-    console.error('Error generating embeddings or storing in DB:', error);
-    return { success: false, error: 'Failed to process and store document.' };
-  }
-}
-
-/**
- * Takes a user's question, finds relevant documents in Supabase, and generates a sourced answer.
+ * Takes a user's question, finds relevant documents, and generates a sourced answer.
  * @param question The user's question.
- * @returns A sourced answer from the AI model.
+ * @returns An ActionResult containing the sourced answer string or an error.
  */
-export async function getSourcedAnswer(question: string) {
+export async function getSourcedAnswer(question: string): Promise<ActionResult<string>> {
+  if (!question) {
+    return { success: false, error: 'Question cannot be empty.' };
+  }
   const { createClient } = await import('@/lib/supabase/server');
   const supabase = await createClient();
-
-  const embeddingModel = 'sentence-transformers/all-MiniLM-L6-v2';
-  let questionEmbedding;
   try {
-    const embeddingResponse = await hf.featureExtraction({
-      model: embeddingModel,
-      inputs: question,
-    }, {
-      provider: 'featherless-ai' // Force specific provider
-    });
-    questionEmbedding = embeddingResponse as number[];
-  } catch (error) {
-    console.error('Error generating question embedding:', error);
-    return "Sorry, I couldn't process your question.";
-  }
-
-  const { data: documents, error: matchError } = await supabase.rpc(
-    'match_documents',
-    {
-      query_embedding: JSON.stringify(questionEmbedding),
-      match_threshold: 0.5,
-      match_count: 5,
+    const questionEmbedding = await ai.embed(question);
+    const { data: documents, error: matchError } = await supabase.rpc(
+      'match_documents',
+      {
+        query_embedding: JSON.stringify(questionEmbedding),
+        match_threshold: 0.5,
+        match_count: 5,
+      }
+    );
+    if (matchError) throw new Error(`Error matching documents: ${matchError.message}`);
+    if (!documents || documents.length === 0) {
+      return { 
+        success: true, 
+        data: "I couldn't find any relevant information in the ingested documents to answer your question." 
+      };
     }
-  );
+    const contextText = documents.map((doc: any) => `- ${doc.content.trim()}`).join('\n\n');
+    const prompt = `
+      Based *only* on the following context from historical documents, please provide a concise answer to the user's question.
+      If the context does not contain the answer, state that you cannot answer based on the provided information.
 
-  if (matchError) {
-    console.error('Error matching documents:', matchError);
-    return 'Sorry, I had trouble searching through the documents.';
+      Context:
+      ${contextText}
+
+      User's Question:
+      ${question}
+    `;
+    const finalAnswer = await ai.chat(prompt);
+    return { success: true, data: finalAnswer };
+  } catch (error) {
+    console.error('Error in getSourcedAnswer:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: `Failed to get sourced answer: ${errorMessage}` };
   }
-
-  if (!documents || documents.length === 0) {
-    return "I couldn't find any relevant information in the ingested documents to answer your question.";
-  }
-
-  const contextText = documents
-    .map((doc: any) => `- ${doc.content.trim()}`)
-    .join('\n\n');
-
-  const prompt = `
-    Based *only* on the following context from historical documents, please provide a concise answer to the user's question.
-    If the context does not contain the answer, state that you cannot answer based on the provided information.
-
-    Context:
-    ${contextText}
-
-    User's Question:
-    ${question}
-  `;
-
-  const finalAnswer = await askModel(prompt);
-  return finalAnswer;
 }
