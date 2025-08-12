@@ -59,8 +59,8 @@ const HEADER_FOOTER_PATTERNS = [
   
   // Document metadata footers
   /^[\s]*Draft[\s\w\d]*$/gim,
-  /^[\s]*Version\s+[\d\.]+[\s]*$/gim,
-  /^[\s]*Rev\.\s+[\d\.]+[\s]*$/gim,
+  /^[\s]*Version\s+[\d\.]+s]*$/gim,
+  /^[\s]*Rev\.\s+[\d\.]+s]*$/gim,
   /^[\s]*Revised\s+\d{1,2}\/\d{1,2}\/\d{4}[\s]*$/gim,
 ];
 
@@ -268,7 +268,7 @@ function validateCleanedText(originalText: string, cleanedText: string): boolean
   const cleanedWords = cleanedText.split(/\s+/).length;
   
   if (cleanedWords < originalWords * 0.5) {
-    console.warn('OCR cleaning removed too many words, using conservative approach');
+    console.warn('OCR cleaning removed too many words, using more conservative approach');
     return false;
   }
   
