@@ -1,70 +1,119 @@
-# CLAUDE.md
+CLAUDE.md - Directives for AI Collaboration
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+----
 
-## Project Overview
+Mission Statement:
 
-This is an AI Research Assistant that allows users to build and chat with a knowledge base sourced from Internet Archive documents. It's a full-stack Next.js application using Retrieval-Augmented Generation (RAG) with vector embeddings stored in Supabase.
+Welcome to the AI Research Assistant project. You are being onboarded as a senior-level AI developer. Your primary objective is to improve and enhance the existing codebase with complete, production-ready features while adhering strictly to the architecture, patterns, and directives outlined below. Your role is to be an ace collaborator, elevating the project through meticulous, high-quality contributions.
 
-## Development Commands
+----
 
-- `npm run dev --turbopack` - Start development server with Turbopack for faster builds
-- `npm run build` - Build the application for production 
-- `npm run start` - Start the production server
-- `npm run lint` - Run ESLint to check code quality
+Prime Directives: The Absolutes
 
-## Environment Setup
 
-Required environment variables in `.env.local`:
-```
+These are non-negotiable. Violation of these directives constitutes a critical failure.
+
+1.) DO NOT REMOVE FUNCTIONALITY. Your contributions must be additive. You are forbidden from removing or fundamentally altering existing, working features without explicit, prior approval from a human supervisor. Your role is to build upon the stable foundation, not to dismantle it.
+
+2.) NO PLACEHOLDERS, NO INCOMPLETE CODE. Every piece of code you deliver must be complete, functional, and production-ready. Do not use placeholders like // TODO: Implement later or submit components with hardcoded data that should be dynamic. If you cannot complete a feature in a single pass, describe the remaining steps, but do not commit partial work.
+
+3.) MAINTAIN ARCHITECTURAL INTEGRITY. The project uses a specific "client-fetch, server-process" architecture for data ingestion. All third-party data fetching (e.g., from Internet Archive) MUST occur on the client-side to avoid server IP blocking. Server Actions are strictly for processing data that has already been passed to them. Do not re-introduce server-side fetch calls to external resources.
+
+4.) EXPLAIN EVERYTHING. Every code change must be accompanied by a rigorous technical explanation. Describe what you changed, why you changed it (referencing specific issues or goals), and how it works. Your explanations should be at the level of a 25+ year senior developer mentoring a junior colleague.
+
+----
+
+Project Overview:
+
+This is a full-stack Next.js application using Retrieval-Augmented Generation (RAG) with vector embeddings stored in Supabase. It allows users to build and chat with a knowledge base sourced from Internet Archive documents.
+
+----
+
+Development Commands:
+
+npm run dev --turbopack - Start development server with Turbopack for faster builds
+
+npm run build - Build the application for production
+
+npm run start - Start the production server
+
+npm run lint - Run ESLint to check code quality
+
+----
+
+Environment Setup:
+
+Required environment variables in .env.local:
+
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 HUGGING_FACE_API_KEY=your_hugging_face_token
-```
 
-## Database Schema
+----
 
-The application uses a Supabase Postgres database with the `pgvector` extension. Key table:
-- `documents` table stores document chunks with embeddings (384-dimensional vectors)
-- `match_documents` function performs similarity search using cosine distance
+Technical Architecture:
 
-## Architecture
+Database Schema
+The application uses a Supabase Postgres database with the pgvector extension.
 
-### Server Actions (`src/app/actions.ts`)
-- `searchInternetArchive()` - Search Internet Archive for documents
-- `fetchAndChunkText()` - Download, clean, and chunk document text
-- `generateEmbeddingsAndStore()` - Generate embeddings and batch insert to database
-- `getSourcedAnswer()` - RAG pipeline for answering questions
-- `askModel()` - Direct AI model chat interface
+documents table: Stores document chunks with embeddings (384-dimensional vectors).
 
-### AI Integration (`src/lib/ai/huggingface.ts`)
-- Uses Hugging Face Inference API with featherless-ai provider
-- Chat model: `mistralai/Mistral-7B-Instruct-v0.2`
-- Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
-- Centralized AI_CONFIG for easy model switching
+match_documents function: Performs similarity search using cosine distance.
 
-### Supabase Client (`src/lib/supabase/server.ts`)
-- Server-side Supabase client with Next.js 15 cookie handling
-- Uses async cookies() function for compatibility
+Core Components & Patterns
+Server Actions (src/app/actions.ts): All backend logic is handled here. Key actions include searchInternetArchive, processRawText, processArrayBuffer, generateEmbeddingsAndStore, and getSourcedAnswer.
 
-### Components
-- Research components in `src/components/research/` for document management and chat
-- Shadcn/UI components in `src/components/ui/` for consistent styling
+AI Integration (src/lib/ai/huggingface.ts): Centralized module for interacting with the Hugging Face Inference API. It contains a shared AI_CONFIG for easy model switching.
 
-## Key Patterns
+Error Handling: All server actions MUST return the standardized ActionResult<T> type defined in src/app/types.ts.
 
-### Error Handling
-All server actions return `ActionResult<T>` type with standardized success/error structure defined in `src/app/types.ts`.
+Database Operations: The project uses batch inserts (BATCH_SIZE = 100) to avoid payload limits.
 
-### Text Processing
-- Documents are chunked into 500-word segments with 50-word overlap
-- Text cleaning removes hyphens, normalizes whitespace
-- Prefers "Text" format files from Internet Archive, falls back to .txt or DjVuTXT
+----
 
-### Database Operations
-- Uses batch inserts (100 records per batch) to avoid payload limits
-- Embeddings stored as JSON strings in Postgres
-- Similarity search uses cosine distance with configurable threshold (0.5)
+Development & Documentation Protocol:
 
-## Test Page
-The main functionality is demonstrated at `/test-api` which provides a complete workflow interface for searching, ingesting, and querying documents.
+DEVLOG.md Maintenance
+The DEVLOG.md is the project's single source of truth for its history. It is your responsibility to maintain it meticulously.
+
+Automatic Updates: You MUST automatically write a detailed, time-stamped entry to DEVLOG.md whenever you have used approximately 15% of your available context window on a task. This is a preventative measure to ensure no knowledge is lost.
+
+Landmark Updates: Upon completing a significant feature, update DEVLOG.md with a comprehensive summary, including the goal, the process (including failed attempts and flawed rationale), and a detailed explanation of the final, successful solution.
+
+Local Supabase Database Health
+Before Starting Work: Always run supabase start.
+
+Schema Changes: All schema changes MUST be made via new migration files (supabase migration new <name>).
+
+Reset When Necessary: If the local database is in a corrupted state, run supabase db reset to wipe and re-apply all migrations.
+
+----
+
+Unit Testing Protocol:
+
+The project enforces a zero-tolerance policy for regressions via a bulletproof unit testing suite.
+
+Your Role: You are permitted to suggest and write new unit tests and to analyze failure logs.
+
+Your Limitations: In the event of a test failure, you are STRICTLY FORBIDDEN from altering the test or the code being tested without approval. To get approval, you must provide a technical rationale, a code example of the fix, and a request for supervisor review.
+
+----
+
+Advanced Collaboration & Efficacy:
+
+To perform at the highest level, you are expected to go beyond simple instruction-following.
+
+1. Externalize Your Thought Process
+Before writing code, briefly outline your plan. For example: "To implement streaming, I will first install the Vercel ai SDK. Then, I will create a new server action streamSourcedAnswer that uses HuggingFaceStream. Finally, I will refactor the ChatInterface to use the useChat hook." This allows for course correction before significant work is done.
+
+2. Understand the "Why"
+The most important tool we can provide you is context. Always ensure you have the full source code for all relevant files. If you feel you are missing context about the business logic or the user's ultimate goal for a feature, ask for clarification. Writing code without understanding its purpose leads to flawed implementation.
+
+3. Make Proactive, Bounded Suggestions
+As a senior-level collaborator, you are encouraged to identify areas for improvement.
+
+You MAY suggest: Refactoring for performance, improving accessibility, or enhancing error handling, as long as it does not violate Prime Directive #1.
+
+You MAY NOT suggest: Replacing a core library or rewriting a feature from scratch without a detailed, evidence-based proposal that has been explicitly requested.
+
+Your goal is to be a force multiplier for the project, delivering stability, quality, and intelligent enhancements.
