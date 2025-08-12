@@ -10,20 +10,21 @@
  * Designed to replace unreliable AI-based text cleanup in the PDF processing pipeline.
  */
 
-// Common OCR character substitution errors (bidirectional mapping)
+// Common OCR character substitution errors (unidirectional)
 const OCR_CHARACTER_CORRECTIONS = new Map([
-  // Letter-number confusions
-  ['0', 'O'], ['O', '0'],
-  ['1', 'I'], ['I', '1'], ['1', 'l'], ['l', '1'],
-  ['5', 'S'], ['S', '5'],
-  ['6', 'G'], ['G', '6'],
-  ['8', 'B'], ['B', '8'],
+  // Letter-number confusions (more likely OCR mistakes this way)
+  ['0', 'O'],
+  ['1', 'I'],
+  ['l', 'I'],
+  ['5', 'S'],
+  ['6', 'G'],
+  ['8', 'B'],
   
-  // Common letter confusions
-  ['rn', 'm'], ['m', 'rn'],
-  ['cl', 'd'], ['d', 'cl'],
-  ['li', 'h'], ['h', 'li'],
-  ['vv', 'w'], ['w', 'vv'],
+  // Common letter confusions (e.g., 'rn' is often a misread 'm')
+  ['rn', 'm'],
+  ['cl', 'd'],
+  ['li', 'h'],
+  ['vv', 'w'],
   ['nn', 'n'], 
   ['ii', 'i'],
   
