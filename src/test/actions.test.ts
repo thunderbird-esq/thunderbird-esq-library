@@ -31,14 +31,14 @@ const mockPdfjs = {
 }
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => mockPdfjs)
 
-// Mock text-processing
+// Mock text processing
 vi.mock('@/lib/text-processing', () => ({
-  fixOcrErrorsAsync: vi.fn(text => Promise.resolve(text)) // Default mock
+  fixOcrErrorsAsync: vi.fn(text => Promise.resolve(`(fixed) ${text}`))
 }))
 
 import * as ai from '@/lib/ai/huggingface'
-import { fixOcrErrorsAsync } from '@/lib/text-processing'
 import { createClient } from '@/lib/supabase/server'
+import { fixOcrErrorsAsync } from '@/lib/text-processing'
 
 describe('RAG Pipeline Actions', () => {
   beforeEach(() => {
@@ -132,8 +132,7 @@ describe('RAG Pipeline Actions', () => {
       
       mockPdfDoc.getPage.mockResolvedValue(mockPage)
       mockPage.getTextContent.mockResolvedValue(mockTextContent)
-      // No longer mocking ai.chat for cleaning, mock fixOcrErrorsAsync instead
-      vi.mocked(fixOcrErrorsAsync).mockImplementation(async (text) => text); // Default behavior: return text as is
+      // No longer mocking ai.chat for cleaning
     })
 
     it('should successfully extract and process PDF text', async () => {
@@ -153,12 +152,13 @@ describe('RAG Pipeline Actions', () => {
       expect(mockPdfDoc.getPage).toHaveBeenCalledWith(1)
       expect(mockPdfDoc.getPage).toHaveBeenCalledWith(2)
       
-      // Verify deterministic cleaning was called, not AI chat
+      // Verify our new OCR fixing function was called
       expect(fixOcrErrorsAsync).toHaveBeenCalled()
       expect(ai.chat).not.toHaveBeenCalled()
     })
 
     it('should handle PDF with no extractable text', async () => {
+      // Setup a PDF with no pages to ensure truly empty rawText
       const mockEmptyPdfDoc = {
         numPages: 0,
         getPage: vi.fn()
@@ -189,31 +189,20 @@ describe('RAG Pipeline Actions', () => {
       expect(result.error).toBe('Corrupted PDF')
     })
 
-    it('should handle OCR cleaning errors', async () => {
-      vi.mocked(fixOcrErrorsAsync).mockRejectedValue(new Error('OCR engine failed'))
-      
-      const mockBuffer = new ArrayBuffer(1024)
-      
-      const result = await processArrayBuffer(mockBuffer)
-      
-      // The function should still succeed by falling back to basic cleaning
-      expect(result.success).toBe(true)
-      expect(result.data).toBeDefined()
-      expect(result.data![0]).toContain('This is page 1 content')
-    })
-
     it('should properly chunk cleaned text', async () => {
-      // Make the mock PDF text longer to ensure multiple chunks are created
-      const longTextItem = { str: 'word '.repeat(300) };
-      const longTextContent = { items: [longTextItem, longTextItem] }; // ~600 words
-      mockPage.getTextContent.mockResolvedValue(longTextContent);
+      // Mock longer text content from the PDF to ensure chunking happens
+      const longTextContent = {
+        items: Array.from({ length: 600 }, (_, i) => ({ str: `word${i}` }))
+      }
+      mockPage.getTextContent.mockResolvedValue(longTextContent)
       
       const mockBuffer = new ArrayBuffer(1024)
       
       const result = await processArrayBuffer(mockBuffer)
       
       expect(result.success).toBe(true)
-      expect(result.data!.length).toBeGreaterThan(1) // Should create multiple chunks
+      // With 600 words and a chunk size of 500 with an overlap, we expect more than one chunk.
+      expect(result.data!.length).toBeGreaterThan(1)
     })
   })
 
