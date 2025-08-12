@@ -5,79 +5,6 @@ import { ActionResult, InternetArchiveDocument, MatchedDocument } from './types'
 import * as ai from '@/lib/ai/huggingface';
 import { fixOcrErrorsAsync } from '@/lib/text-processing';
 
-// Debugging and instrumentation utilities
-function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function formatMemoryUsage(): string {
-  if (typeof process !== 'undefined' && process.memoryUsage) {
-    const usage = process.memoryUsage();
-    return `RSS: ${Math.round(usage.rss / 1024 / 1024)}MB, Heap: ${Math.round(usage.heapUsed / 1024 / 1024)}MB`;
-  }
-  return 'Memory info unavailable';
-}
-
-function logActionStart(actionName: string, requestId: string, params: Record<string, any> = {}): void {
-  const sanitizedParams = Object.keys(params).reduce((acc, key) => {
-    const value = params[key];
-    // Sanitize sensitive or large data
-    if (key.toLowerCase().includes('password') || key.toLowerCase().includes('token')) {
-      acc[key] = '[REDACTED]';
-    } else if (typeof value === 'string' && value.length > 100) {
-      acc[key] = `[STRING:${value.length}chars]`;
-    } else if (value instanceof ArrayBuffer) {
-      acc[key] = `[ARRAYBUFFER:${value.byteLength}bytes]`;
-    } else if (Array.isArray(value)) {
-      acc[key] = `[ARRAY:${value.length}items]`;
-    } else {
-      acc[key] = value;
-    }
-    return acc;
-  }, {} as Record<string, any>);
-  
-  console.log(`🚀 [${requestId}] ${actionName} START`, {
-    timestamp: new Date().toISOString(),
-    memory: formatMemoryUsage(),
-    params: sanitizedParams
-  });
-}
-
-function logActionEnd(actionName: string, requestId: string, success: boolean, executionTimeMs: number, result?: any): void {
-  const resultSummary = success 
-    ? (typeof result === 'object' && result !== null 
-        ? `SUCCESS: ${JSON.stringify(result).substring(0, 200)}${JSON.stringify(result).length > 200 ? '...' : ''}` 
-        : `SUCCESS: ${result}`)
-    : `ERROR: ${result || 'Unknown error'}`;
-    
-  console.log(`🏁 [${requestId}] ${actionName} END`, {
-    timestamp: new Date().toISOString(),
-    success,
-    executionTimeMs,
-    memory: formatMemoryUsage(),
-    result: resultSummary
-  });
-}
-
-function logActionProgress(actionName: string, requestId: string, stage: string, details: Record<string, any> = {}): void {
-  console.log(`⚡ [${requestId}] ${actionName} - ${stage}`, {
-    timestamp: new Date().toISOString(),
-    ...details
-  });
-}
-
-function logActionError(actionName: string, requestId: string, stage: string, error: any, context: Record<string, any> = {}): void {
-  const errorDetails = {
-    message: error instanceof Error ? error.message : 'Unknown error',
-    stack: error instanceof Error ? error.stack : undefined,
-    stage,
-    context,
-    timestamp: new Date().toISOString(),
-    memory: formatMemoryUsage()
-  };
-  
-  console.error(`❌ [${requestId}] ${actionName} ERROR in ${stage}:`, errorDetails);
-}
 
 /**
  * Wrapper function to apply OCR correction with timeout protection.
@@ -117,7 +44,7 @@ async function processOcrWithTimeout(
     const result = await Promise.race([ocrPromise(), timeoutPromise]);
     progressCallback?.({ stage: 'ocr_correction', percent: 75, message: 'OCR correction completed' });
     return result;
-  } catch (error) {
+  } catch {
     // Timeout occurred, use basic cleanup
     console.warn('OCR correction timed out, using basic text cleanup');
     progressCallback?.({ stage: 'ocr_correction', percent: 75, message: 'Using basic text cleanup due to timeout' });
