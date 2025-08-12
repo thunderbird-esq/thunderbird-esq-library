@@ -31,8 +31,14 @@ const mockPdfjs = {
 }
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => mockPdfjs)
 
+// Mock text processing
+vi.mock('@/lib/text-processing', () => ({
+  fixOcrErrorsAsync: vi.fn(text => Promise.resolve(`(fixed) ${text}`))
+}))
+
 import * as ai from '@/lib/ai/huggingface'
 import { createClient } from '@/lib/supabase/server'
+import { fixOcrErrorsAsync } from '@/lib/text-processing'
 
 describe('RAG Pipeline Actions', () => {
   beforeEach(() => {
@@ -126,7 +132,7 @@ describe('RAG Pipeline Actions', () => {
       
       mockPdfDoc.getPage.mockResolvedValue(mockPage)
       mockPage.getTextContent.mockResolvedValue(mockTextContent)
-      vi.mocked(ai.chat).mockResolvedValue('This is cleaned text from the AI. '.repeat(20))
+      // No longer mocking ai.chat for cleaning
     })
 
     it('should successfully extract and process PDF text', async () => {
@@ -146,8 +152,9 @@ describe('RAG Pipeline Actions', () => {
       expect(mockPdfDoc.getPage).toHaveBeenCalledWith(1)
       expect(mockPdfDoc.getPage).toHaveBeenCalledWith(2)
       
-      // Verify AI cleaning was called
-      expect(ai.chat).toHaveBeenCalledWith(expect.stringContaining('Clean it up'))
+      // Verify our new OCR fixing function was called
+      expect(fixOcrErrorsAsync).toHaveBeenCalled()
+      expect(ai.chat).not.toHaveBeenCalled()
     })
 
     it('should handle PDF with no extractable text', async () => {
@@ -182,28 +189,20 @@ describe('RAG Pipeline Actions', () => {
       expect(result.error).toBe('Corrupted PDF')
     })
 
-    it('should handle AI cleaning errors', async () => {
-      vi.mocked(ai.chat).mockRejectedValue(new Error('AI service unavailable'))
-      
-      const mockBuffer = new ArrayBuffer(1024)
-      
-      const result = await processArrayBuffer(mockBuffer)
-      
-      expect(result.success).toBe(false)
-      expect(result.error).toBe('AI service unavailable')
-    })
-
     it('should properly chunk cleaned text', async () => {
-      // Mock AI to return long text
-      const longCleanedText = 'cleaned word '.repeat(600)
-      vi.mocked(ai.chat).mockResolvedValue(longCleanedText)
+      // Mock longer text content from the PDF to ensure chunking happens
+      const longTextContent = {
+        items: Array.from({ length: 600 }, (_, i) => ({ str: `word${i}` }))
+      }
+      mockPage.getTextContent.mockResolvedValue(longTextContent)
       
       const mockBuffer = new ArrayBuffer(1024)
       
       const result = await processArrayBuffer(mockBuffer)
       
       expect(result.success).toBe(true)
-      expect(result.data!.length).toBeGreaterThan(1) // Should create multiple chunks
+      // With 600 words and a chunk size of 500 with an overlap, we expect more than one chunk.
+      expect(result.data!.length).toBeGreaterThan(1)
     })
   })
 
