@@ -531,20 +531,20 @@ export async function generateEmbeddingsAndStore(
  * @returns An ActionResult containing an array of documents or an error.
  */
 export async function searchInternetArchive(topic: string): Promise<ActionResult<InternetArchiveDocument[]>> {
-  if (!topic) {
-    return { success: false, error: 'Search topic cannot be empty.' };
-  }
-  const searchUrl = 'https://archive.org/advancedsearch.php';
-  const query = `(title:("${topic}") OR subject:("${topic}") OR description:("${topic}")) AND mediatype:(texts)`;
-  const params = new URLSearchParams({
-    q: query,
-    'fl[]': 'identifier,title,creator,date,format',
-    rows: '20',
-    page: '1',
-    output: 'json',
-  });
-
   try {
+    if (!topic) {
+      throw new Error('Search topic cannot be empty.');
+    }
+    const searchUrl = 'https://archive.org/advancedsearch.php';
+    const query = `(title:("${topic}") OR subject:("${topic}") OR description:("${topic}")) AND mediatype:(texts)`;
+    const params = new URLSearchParams({
+      q: query,
+      'fl[]': 'identifier,title,creator,date,format',
+      rows: '20',
+      page: '1',
+      output: 'json',
+    });
+
     const response = await fetch(`${searchUrl}?${params.toString()}`);
     if (!response.ok) {
       throw new Error(`API call failed with status: ${response.status}`);
@@ -564,10 +564,10 @@ export async function searchInternetArchive(topic: string): Promise<ActionResult
  * @returns An ActionResult containing the AI's response string or an error.
  */
 export async function askModel(prompt: string): Promise<ActionResult<string>> {
-  if (!prompt) {
-    return { success: false, error: 'Prompt cannot be empty.' };
-  }
   try {
+    if (!prompt) {
+      throw new Error('Prompt cannot be empty.');
+    }
     const modelResponse = await ai.chat(prompt);
     return { success: true, data: modelResponse };
   } catch (error) {
@@ -583,12 +583,12 @@ export async function askModel(prompt: string): Promise<ActionResult<string>> {
  * @returns An ActionResult containing the sourced answer string or an error.
  */
 export async function getSourcedAnswer(question: string): Promise<ActionResult<string>> {
-  if (!question) {
-    return { success: false, error: 'Question cannot be empty.' };
-  }
-  const { createClient } = await import('@/lib/supabase/server');
-  const supabase = await createClient();
   try {
+    if (!question) {
+      throw new Error('Question cannot be empty.');
+    }
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
     const questionEmbedding = await ai.embed(question);
     const { data: documents, error: matchError } = await supabase.rpc(
       'match_documents',
@@ -600,9 +600,9 @@ export async function getSourcedAnswer(question: string): Promise<ActionResult<s
     );
     if (matchError) throw new Error(`Error matching documents: ${matchError.message}`);
     if (!documents || documents.length === 0) {
-      return { 
-        success: true, 
-        data: "I couldn't find any relevant information in the ingested documents to answer your question." 
+      return {
+        success: true,
+        data: "I couldn't find any relevant information in the ingested documents to answer your question."
       };
     }
     const contextText = documents.map((doc: MatchedDocument) => `- ${doc.content.trim()}`).join('\n\n');
