@@ -1,29 +1,107 @@
 // src/components/research/ChatInterface.tsx
 'use client';
 
-import { useState } from 'react';
-import { getSourcedAnswer } from '@/app/actions';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-export function ChatInterface() {
-  const [question, setQuestion] = useState("What was Louis Pasteur's role?");
-  const [finalAnswer, setFinalAnswer] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
 
-  const handleQuestionSubmit = async () => {
-    setLoading(true);
-    setFinalAnswer('');
-    setError('');
-    const result = await getSourcedAnswer(question);
-    if (result.success && result.data) {
-      setFinalAnswer(result.data);
-    } else {
-      setError(result.error || 'An unknown error occurred.');
+export function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input.trim()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map(m => ({
+            role: m.role,
+            content: m.content
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: ''
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            
+            setMessages(prev => {
+              const newMessages = [...prev];
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage && lastMessage.role === 'assistant') {
+                lastMessage.content += chunk;
+              }
+              return newMessages;
+            });
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -32,33 +110,40 @@ export function ChatInterface() {
         <CardTitle>Step 3: Chat with Your Documents (RAG)</CardTitle>
       </CardHeader>
       <CardContent>
-        {error && (
-            <p className="mb-4 text-sm text-red-500 font-bold bg-red-500/10 p-3 rounded-md">
-              Error: {error}
-            </p>
-        )}
-        <div className="flex flex-col gap-4">
-          <Textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask a question about the ingested documents..."
-            disabled={loading}
-          />
-          <Button
-            type="button"
-            onClick={handleQuestionSubmit}
-            disabled={loading}
-          >
-            {loading ? 'Thinking...' : 'Get Sourced Answer'}
-          </Button>
-        </div>
-        {finalAnswer && (
-          <div className="mt-6">
-            <p className="whitespace-pre-wrap font-mono text-sm p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
-              {finalAnswer}
-            </p>
+        <div className="space-y-4">
+          <div className="h-96 overflow-y-auto p-4 border rounded-md bg-gray-50 dark:bg-gray-900">
+            {messages.map(message => (
+              <div key={message.id} className="whitespace-pre-wrap mb-4">
+                <strong className="font-semibold">
+                  {message.role === 'user' ? 'You: ' : 'AI: '}
+                </strong>
+                {message.content}
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex items-center gap-2 text-gray-500">
+                <div className="animate-pulse">AI is thinking...</div>
+              </div>
+            )}
+            {messages.length === 0 && (
+              <div className="text-gray-500 text-center py-8">
+                Start a conversation by asking a question about your ingested documents...
+              </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        )}
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <Input
+              value={input}
+              placeholder="Ask a question about the ingested documents..."
+              onChange={(e) => setInput(e.target.value)}
+              disabled={isLoading}
+            />
+            <Button type="submit" disabled={isLoading || !input.trim()}>
+              {isLoading ? 'Thinking...' : 'Send'}
+            </Button>
+          </form>
+        </div>
       </CardContent>
     </Card>
   );

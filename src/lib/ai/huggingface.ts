@@ -6,7 +6,6 @@ import { HfInference } from '@huggingface/inference';
 const AI_CONFIG = {
   chatModel: 'mistralai/Mistral-7B-Instruct-v0.2',
   embeddingModel: 'sentence-transformers/all-MiniLM-L6-v2',
-  provider: 'featherless-ai' as const, // Use 'as const' for type safety
 };
 
 if (!process.env.HUGGING_FACE_API_KEY) {
@@ -26,8 +25,6 @@ export async function chat(prompt: string): Promise<string> {
     model: AI_CONFIG.chatModel,
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 500,
-  }, {
-    provider: AI_CONFIG.provider,
   });
 
   const content = response.choices[0]?.message?.content;
@@ -47,8 +44,6 @@ export async function embed(text: string): Promise<number[]> {
   const embeddingResponse = await hf.featureExtraction({
     model: AI_CONFIG.embeddingModel,
     inputs: text,
-  }, {
-    provider: AI_CONFIG.provider,
   });
 
   if (!Array.isArray(embeddingResponse) || embeddingResponse.length === 0) {
