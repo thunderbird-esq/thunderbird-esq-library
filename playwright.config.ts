@@ -99,11 +99,6 @@ export default defineConfig({
     timeout: 300000, // 5 minutes for complex startup (Supabase + Next.js)
     stdout: 'pipe',
     stderr: 'pipe',
-    // Ensure server is fully ready before proceeding
-    waitForUrl: {
-      url: 'http://localhost:3000',
-      timeout: 60000, // Extended to 60s for health check after server starts
-    },
     // Environment variables for the server process
     env: {
       NODE_ENV: 'test',

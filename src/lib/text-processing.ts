@@ -1,5 +1,3 @@
-// src/lib/text-processing.ts
-
 /**
  * Robust OCR Error Correction System for PDF Text Processing
  * 
