@@ -31,9 +31,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_local_anon_key
 HUGGING_FACE_API_KEY=your_hugging_face_token
 ```
 
-## Mandatory Startup Sequence
+## Simplified Startup Sequence
 
-### Terminal 1: Database Operations
+The development server is now configured to automatically check the database health before starting.
+
+### Single Terminal Startup
 
 ```bash
 # 1. Start Docker Desktop (GUI) or Docker daemon
@@ -41,25 +43,18 @@ HUGGING_FACE_API_KEY=your_hugging_face_token
 # Linux: sudo systemctl start docker
 
 # 2. Navigate to project directory
-cd /Users/michaelraftery/thunderbird-esq-library
+cd /path/to/your/project
 
-# 3. Run database health check
-./scripts/db-health-check.sh
+# 3. Start the application
+npm run dev
 
-# 4. If health check passes, Supabase is running
-# Keep this terminal open - DO NOT CLOSE
-```
+# The script will automatically:
+# - Check for Docker and Supabase CLI
+# - Start Supabase if it's not running
+# - Validate the database schema
+# - Start the Next.js development server
 
-### Terminal 2: Application Development
-
-```bash
-# 1. Navigate to project directory (new terminal)
-cd /Users/michaelraftery/thunderbird-esq-library
-
-# 2. Start Next.js with Turbopack
-npm run dev --turbopack
-
-# 3. Access application at http://localhost:3000
+# 4. Access application at http://localhost:3000
 ```
 
 ## Database Health Verification
