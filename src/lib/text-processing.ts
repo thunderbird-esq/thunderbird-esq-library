@@ -1,5 +1,3 @@
-// src/lib/text-processing.ts
-
 /**
  * Robust OCR Error Correction System for PDF Text Processing
  * 
@@ -10,17 +8,16 @@
  * Designed to replace unreliable AI-based text cleanup in the PDF processing pipeline.
  */
 
-// Common OCR character substitution errors (unidirectional)
+// Common OCR character substitution errors (bidirectional mapping)
 const OCR_CHARACTER_CORRECTIONS = new Map([
-  // Letter-number confusions (more likely OCR mistakes this way)
-  ['0', 'O'],
-  ['1', 'I'],
-  ['l', 'I'],
-  ['5', 'S'],
-  ['6', 'G'],
-  ['8', 'B'],
+  // Letter-number confusions
+  ['0', 'O'], ['O', '0'],
+  ['1', 'I'], ['I', '1'], ['1', 'l'], ['l', '1'],
+  ['5', 'S'], ['S', '5'],
+  ['6', 'G'], ['G', '6'],
+  ['8', 'B'], ['B', '8'],
   
-  // Common letter confusions (e.g., 'rn' is often a misread 'm')
+  // Common letter confusions
   ['rn', 'm'],
   ['cl', 'd'],
   ['li', 'h'],
@@ -60,8 +57,8 @@ const HEADER_FOOTER_PATTERNS = [
   
   // Document metadata footers
   /^[\s]*Draft[\s\w\d]*$/gim,
-  /^[\s]*Version\s+[\d\.]+[\s]*$/gim,
-  /^[\s]*Rev\.\s+[\d\.]+[\s]*$/gim,
+  /^[\s]*Version\s+[\d\.]+s]*$/gim,
+  /^[\s]*Rev\.\s+[\d\.]+s]*$/gim,
   /^[\s]*Revised\s+\d{1,2}\/\d{1,2}\/\d{4}[\s]*$/gim,
 ];
 
@@ -126,44 +123,56 @@ function fixHyphenatedWords(text: string): string {
     .replace(/\s-\s/g, ' – ');
 }
 
-/**
- * Corrects common OCR character recognition errors.
- * Uses a comprehensive mapping of frequently confused characters.
- */
-function correctCharacterErrors(text: string): string {
-  // PERFORMANCE OPTIMIZATION: Use single-pass string processing instead of multiple regex loops.
-  // This reduces time complexity from O(n*m) to O(n) for large documents.
-  let corrected = text;
+// Caches to store the compiled regex and lookup maps, so they're only built once.
+let charRegex: RegExp | null = null;
+const charReplacerMap = new Map<string, string>();
 
-  // 1. Single-pass for character corrections
-  const ocrKeys = Array.from(OCR_CHARACTER_CORRECTIONS.keys());
-  const escapedOcrKeys = ocrKeys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const ocrRegex = new RegExp(escapedOcrKeys.join('|'), 'g');
-  
-  corrected = corrected.replace(ocrRegex, (match) => OCR_CHARACTER_CORRECTIONS.get(match)!);
+let termRegex: RegExp | null = null;
+const termReplacerMap = new Map<string, string>();
 
-  // 2. Single-pass for business/legal term corrections (with word boundaries)
-  const termKeys = Array.from(BUSINESS_LEGAL_TERMS.keys());
-  const escapedTermKeys = termKeys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const termRegex = new RegExp(`\\b(${escapedTermKeys.join('|')})\\b`, 'gi');
-
-  corrected = corrected.replace(termRegex, (match) => {
-    // The map has lowercase keys, so we match case-insensitively and look up with the lowercase version.
-    return BUSINESS_LEGAL_TERMS.get(match.toLowerCase())!;
-  });
-
-  return corrected;
+// Function to escape regex special characters.
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Async version of character error correction with yielding support.
- * Processes corrections in batches to prevent event loop blocking.
+ * Corrects common OCR character recognition errors.
+ * This function is performance-optimized to run in O(n) time. It builds two
+ * comprehensive regular expressions (one for character swaps, one for term swaps)
+ * and uses a replacer function to perform all substitutions in two passes.
  */
-async function correctCharacterErrorsAsync(text: string): Promise<string> {
-  // This function is now a lightweight wrapper around the optimized synchronous version.
-  // The synchronous function is fast enough that fine-grained yielding is no longer required here.
-  // Yielding is still performed between major steps in the calling function `fixOcrErrorsAsync`.
-  return correctCharacterErrors(text);
+function correctCharacterErrors(text: string): string {
+  // Initialize character correction regex and map on first run
+  if (!charRegex) {
+    const charPatterns = Array.from(OCR_CHARACTER_CORRECTIONS.keys());
+    for (const [wrong, right] of OCR_CHARACTER_CORRECTIONS) {
+      charReplacerMap.set(wrong, right);
+    }
+    charRegex = new RegExp(charPatterns.map(escapeRegex).join('|'), 'g');
+  }
+
+  // Initialize business term correction regex and map on first run
+  if (!termRegex) {
+    const termPatterns = Array.from(BUSINESS_LEGAL_TERMS.keys());
+    for (const [wrong, right] of BUSINESS_LEGAL_TERMS) {
+      // Store lowercase for case-insensitive matching
+      termReplacerMap.set(wrong.toLowerCase(), right);
+    }
+    termRegex = new RegExp(`\\b(${termPatterns.map(escapeRegex).join('|')})\\b`, 'gi');
+  }
+
+  // First pass: Apply case-sensitive character corrections
+  let corrected = text.replace(charRegex, (match) => {
+    return charReplacerMap.get(match) || match;
+  });
+
+  // Second pass: Apply case-insensitive, whole-word business term corrections
+  corrected = corrected.replace(termRegex, (match) => {
+    // Look up the lowercase version of the match
+    return termReplacerMap.get(match.toLowerCase()) || match;
+  });
+
+  return corrected;
 }
 
 /**
@@ -257,7 +266,7 @@ function validateCleanedText(originalText: string, cleanedText: string): boolean
   const cleanedWords = cleanedText.split(/\s+/).length;
   
   if (cleanedWords < originalWords * 0.5) {
-    console.warn('OCR cleaning removed too many words, using conservative approach');
+    console.warn('OCR cleaning removed too many words, using more conservative approach');
     return false;
   }
   
@@ -328,7 +337,7 @@ export async function fixOcrErrorsAsync(text: string): Promise<string> {
     await new Promise(resolve => setTimeout(resolve, 0));
     
     // Step 2: Correct character recognition errors
-    cleaned = await correctCharacterErrorsAsync(cleaned);
+    cleaned = correctCharacterErrors(cleaned);
     console.log('✓ Corrected character errors');
     
     // Yield control after character corrections
