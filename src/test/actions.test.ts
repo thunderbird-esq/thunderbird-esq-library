@@ -192,7 +192,7 @@ describe('RAG Pipeline Actions', () => {
     it('should properly chunk cleaned text', async () => {
       // Mock longer text content from the PDF to ensure chunking happens
       const longTextContent = {
-        items: Array.from({ length: 200 }, (_, i) => ({ str: `word${i}` }))
+        items: Array.from({ length: 600 }, (_, i) => ({ str: `word${i}` }))
       }
       mockPage.getTextContent.mockResolvedValue(longTextContent)
       
@@ -201,11 +201,8 @@ describe('RAG Pipeline Actions', () => {
       const result = await processArrayBuffer(mockBuffer)
       
       expect(result.success).toBe(true)
-      // The mock for fixOcrErrors adds "(fixed) " which is 8 chars.
-      // 200 words * 5 chars/word = 1000. Total length > 500, so it should chunk.
-      // This is a bit brittle, but confirms chunking logic is reached.
-      // A better test might not rely on exact chunking implementation details.
-      expect(result.data!.length).toBeGreaterThan(0)
+      // With 600 words and a chunk size of 500 with an overlap, we expect more than one chunk.
+      expect(result.data!.length).toBeGreaterThan(1)
     })
   })
 

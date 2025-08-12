@@ -20,10 +20,10 @@ const OCR_CHARACTER_CORRECTIONS = new Map([
   ['8', 'B'], ['B', '8'],
   
   // Common letter confusions
-  ['rn', 'm'], ['m', 'rn'],
-  ['cl', 'd'], ['d', 'cl'],
-  ['li', 'h'], ['h', 'li'],
-  ['vv', 'w'], ['w', 'vv'],
+  ['rn', 'm'],
+  ['cl', 'd'],
+  ['li', 'h'],
+  ['vv', 'w'],
   ['nn', 'n'], 
   ['ii', 'i'],
   
