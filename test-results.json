@@ -83,10 +83,6 @@
       "timeout": 300000,
       "stdout": "pipe",
       "stderr": "pipe",
-      "waitForUrl": {
-        "url": "http://localhost:3000",
-        "timeout": 60000
-      },
       "env": {
         "NODE_ENV": "test",
         "NEXT_CONFIG_MODE": "test"
@@ -101,8 +97,8 @@
     }
   ],
   "stats": {
-    "startTime": "2025-08-12T03:54:01.299Z",
-    "duration": 335.97,
+    "startTime": "2025-08-12T04:36:53.660Z",
+    "duration": 14620.284,
     "expected": 0,
     "skipped": 0,
     "unexpected": 0,
