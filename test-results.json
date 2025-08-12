@@ -1,11 +1,11 @@
 {
   "config": {
-    "configFile": "/Users/michaelraftery/thunderbird-esq-library/playwright.config.ts",
-    "rootDir": "/Users/michaelraftery/thunderbird-esq-library/tests/e2e",
+    "configFile": "/app/playwright.config.ts",
+    "rootDir": "/app/tests/e2e",
     "forbidOnly": false,
     "fullyParallel": true,
-    "globalSetup": "/Users/michaelraftery/thunderbird-esq-library/tests/global-setup.ts",
-    "globalTeardown": "/Users/michaelraftery/thunderbird-esq-library/tests/global-teardown.ts",
+    "globalSetup": "/app/tests/global-setup.ts",
+    "globalTeardown": "/app/tests/global-teardown.ts",
     "globalTimeout": 600000,
     "grep": {},
     "grepInvert": null,
@@ -13,7 +13,7 @@
     "metadata": {
       "testEnvironment": "local-supabase",
       "nodeVersion": "v22.17.1",
-      "os": "darwin"
+      "os": "linux"
     },
     "preserveOutput": "failures-only",
     "reporter": [
@@ -52,17 +52,17 @@
     "quiet": false,
     "projects": [
       {
-        "outputDir": "/Users/michaelraftery/thunderbird-esq-library/test-results",
+        "outputDir": "/app/test-results",
         "repeatEach": 1,
         "retries": 1,
         "metadata": {
           "testEnvironment": "local-supabase",
           "nodeVersion": "v22.17.1",
-          "os": "darwin"
+          "os": "linux"
         },
         "id": "firefox",
         "name": "firefox",
-        "testDir": "/Users/michaelraftery/thunderbird-esq-library/tests/e2e",
+        "testDir": "/app/tests/e2e",
         "testIgnore": [],
         "testMatch": [
           "**/tests/e2e/**/*.spec.ts",
@@ -93,353 +93,18 @@
       }
     }
   },
-  "suites": [
+  "suites": [],
+  "errors": [
     {
-      "title": "example.spec.ts",
-      "file": "example.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [],
-      "suites": [
-        {
-          "title": "Playwright Setup Validation",
-          "file": "example.spec.ts",
-          "line": 7,
-          "column": 6,
-          "specs": [
-            {
-              "title": "should load the application homepage",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "a30a6eba6312f6b87ea5-136eaf5cd10ed437791d",
-              "file": "example.spec.ts",
-              "line": 8,
-              "column": 7
-            },
-            {
-              "title": "should have proper Next.js hydration",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "a30a6eba6312f6b87ea5-d249791decf7105ac113",
-              "file": "example.spec.ts",
-              "line": 23,
-              "column": 7
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "title": "ingestion-pipeline.spec.ts",
-      "file": "ingestion-pipeline.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [],
-      "suites": [
-        {
-          "title": "Thunderbird-ESQ Ingestion Pipeline E2E Tests",
-          "file": "ingestion-pipeline.spec.ts",
-          "line": 324,
-          "column": 6,
-          "specs": [
-            {
-              "title": "Application Infrastructure - Basic Loading and API Health",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-3c62e519eab57da220f8",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 348,
-              "column": 7
-            },
-            {
-              "title": "Internet Archive Integration - Real Search API",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-2a52a498e221e4a0db31",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 392,
-              "column": 7
-            },
-            {
-              "title": "Document Ingestion Pipeline - PDF Processing",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-eb313e837add08c86394",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 424,
-              "column": 7
-            },
-            {
-              "title": "Document Ingestion Pipeline - Text Processing",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-8b3dc4646475b6ee62ec",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 449,
-              "column": 7
-            },
-            {
-              "title": "RAG Query System - Real Embeddings and Chat",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-55929726d372742ea5ee",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 474,
-              "column": 7
-            },
-            {
-              "title": "Error Handling - Network Failures and Invalid Operations",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-5031f86bae4f4df5b755",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 503,
-              "column": 7
-            },
-            {
-              "title": "Performance and Reliability - Concurrent Operations",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-bba589aa96665c7837ce",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 547,
-              "column": 7
-            },
-            {
-              "title": "Full End-to-End Workflow - Complete User Journey",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-72b883f75572c8ab78d4",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 575,
-              "column": 7
-            }
-          ]
-        },
-        {
-          "title": "Database Integration Tests",
-          "file": "ingestion-pipeline.spec.ts",
-          "line": 634,
-          "column": 6,
-          "specs": [
-            {
-              "title": "Supabase Connection and Schema Validation",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-885289d3b9f0422dc379",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 635,
-              "column": 7
-            },
-            {
-              "title": "Document Storage and Retrieval Verification",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "0dd9126fc8cbaedb240c-27973d37b70e06c965f1",
-              "file": "ingestion-pipeline.spec.ts",
-              "line": 670,
-              "column": 7
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "title": "playwright-setup.spec.ts",
-      "file": "playwright-setup.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [],
-      "suites": [
-        {
-          "title": "Playwright Infrastructure Validation",
-          "file": "playwright-setup.spec.ts",
-          "line": 8,
-          "column": 6,
-          "specs": [
-            {
-              "title": "should initialize browser context successfully",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "ed008c2b1708a711bef0-419870ba4d4d291353f6",
-              "file": "playwright-setup.spec.ts",
-              "line": 9,
-              "column": 7
-            },
-            {
-              "title": "should support basic DOM interactions",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "ed008c2b1708a711bef0-f87c08a6e829edc29869",
-              "file": "playwright-setup.spec.ts",
-              "line": 30,
-              "column": 7
-            }
-          ]
-        }
-      ]
+      "message": "Error: Process from config.webServer was not able to start. Exit code: 1",
+      "stack": "Error: Process from config.webServer was not able to start. Exit code: 1"
     }
   ],
-  "errors": [],
   "stats": {
-    "startTime": "2025-08-12T02:45:20.477Z",
-    "duration": 53.11399999999992,
+    "startTime": "2025-08-12T03:54:01.299Z",
+    "duration": 335.97,
     "expected": 0,
-    "skipped": 14,
+    "skipped": 0,
     "unexpected": 0,
     "flaky": 0
   }

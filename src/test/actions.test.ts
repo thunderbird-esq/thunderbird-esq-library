@@ -25,6 +25,11 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn()
 }))
 
+// Mock the text processing module
+vi.mock('@/lib/text-processing', () => ({
+  fixOcrErrorsAsync: vi.fn()
+}))
+
 // Mock pdfjs-dist
 const mockPdfjs = {
   getDocument: vi.fn()
@@ -32,6 +37,7 @@ const mockPdfjs = {
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => mockPdfjs)
 
 import * as ai from '@/lib/ai/huggingface'
+import * as textProcessing from '@/lib/text-processing'
 import { createClient } from '@/lib/supabase/server'
 
 describe('RAG Pipeline Actions', () => {
@@ -126,7 +132,7 @@ describe('RAG Pipeline Actions', () => {
       
       mockPdfDoc.getPage.mockResolvedValue(mockPage)
       mockPage.getTextContent.mockResolvedValue(mockTextContent)
-      vi.mocked(ai.chat).mockResolvedValue('This is cleaned text from the AI. '.repeat(20))
+      vi.mocked(textProcessing.fixOcrErrorsAsync).mockImplementation(async (text) => `cleaned: ${text}`)
     })
 
     it('should successfully extract and process PDF text', async () => {
@@ -146,8 +152,8 @@ describe('RAG Pipeline Actions', () => {
       expect(mockPdfDoc.getPage).toHaveBeenCalledWith(1)
       expect(mockPdfDoc.getPage).toHaveBeenCalledWith(2)
       
-      // Verify AI cleaning was called
-      expect(ai.chat).toHaveBeenCalledWith(expect.stringContaining('Clean it up'))
+      // Verify OCR cleaning was called
+      expect(textProcessing.fixOcrErrorsAsync).toHaveBeenCalled()
     })
 
     it('should handle PDF with no extractable text', async () => {
@@ -182,21 +188,32 @@ describe('RAG Pipeline Actions', () => {
       expect(result.error).toBe('Corrupted PDF')
     })
 
-    it('should handle AI cleaning errors', async () => {
-      vi.mocked(ai.chat).mockRejectedValue(new Error('AI service unavailable'))
+    it('should handle OCR cleaning errors', async () => {
+      vi.mocked(textProcessing.fixOcrErrorsAsync).mockRejectedValue(new Error('OCR service unavailable'))
       
       const mockBuffer = new ArrayBuffer(1024)
       
       const result = await processArrayBuffer(mockBuffer)
       
-      expect(result.success).toBe(false)
-      expect(result.error).toBe('AI service unavailable')
+      // The function should still succeed by using a basic fallback
+      expect(result.success).toBe(true)
+      expect(result.data).toBeDefined()
     })
 
     it('should properly chunk cleaned text', async () => {
-      // Mock AI to return long text
-      const longCleanedText = 'cleaned word '.repeat(600)
-      vi.mocked(ai.chat).mockResolvedValue(longCleanedText)
+      // Create a mock page that returns a very long text content
+      const longMockText = 'word '.repeat(600)
+      const mockLongTextContent = { items: [{ str: longMockText }] }
+      const mockLongTextPage = { getTextContent: vi.fn().mockResolvedValue(mockLongTextContent) }
+
+      // Setup a PDF that uses this long-text page
+      const mockSinglePagePdfDoc = {
+        numPages: 1,
+        getPage: vi.fn().mockResolvedValue(mockLongTextPage)
+      }
+      mockPdfjs.getDocument.mockReturnValue({
+        promise: Promise.resolve(mockSinglePagePdfDoc)
+      })
       
       const mockBuffer = new ArrayBuffer(1024)
       
