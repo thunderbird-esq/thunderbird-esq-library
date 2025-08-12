@@ -533,7 +533,7 @@ export async function generateEmbeddingsAndStore(
 export async function searchInternetArchive(topic: string): Promise<ActionResult<InternetArchiveDocument[]>> {
   try {
     if (!topic) {
-      return { success: false, error: 'Search topic cannot be empty.' };
+      throw new Error('Search topic cannot be empty.');
     }
     const searchUrl = 'https://archive.org/advancedsearch.php';
     const query = `(title:("${topic}") OR subject:("${topic}") OR description:("${topic}")) AND mediatype:(texts)`;
@@ -566,7 +566,7 @@ export async function searchInternetArchive(topic: string): Promise<ActionResult
 export async function askModel(prompt: string): Promise<ActionResult<string>> {
   try {
     if (!prompt) {
-      return { success: false, error: 'Prompt cannot be empty.' };
+      throw new Error('Prompt cannot be empty.');
     }
     const modelResponse = await ai.chat(prompt);
     return { success: true, data: modelResponse };
@@ -585,7 +585,7 @@ export async function askModel(prompt: string): Promise<ActionResult<string>> {
 export async function getSourcedAnswer(question: string): Promise<ActionResult<string>> {
   try {
     if (!question) {
-      return { success: false, error: 'Question cannot be empty.' };
+      throw new Error('Question cannot be empty.');
     }
     const { createClient } = await import('@/lib/supabase/server');
     const supabase = await createClient();
