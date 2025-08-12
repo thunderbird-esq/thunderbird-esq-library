@@ -10,20 +10,21 @@
  * Designed to replace unreliable AI-based text cleanup in the PDF processing pipeline.
  */
 
-// Common OCR character substitution errors (bidirectional mapping)
+// Common OCR character substitution errors (unidirectional)
 const OCR_CHARACTER_CORRECTIONS = new Map([
-  // Letter-number confusions
-  ['0', 'O'], ['O', '0'],
-  ['1', 'I'], ['I', '1'], ['1', 'l'], ['l', '1'],
-  ['5', 'S'], ['S', '5'],
-  ['6', 'G'], ['G', '6'],
-  ['8', 'B'], ['B', '8'],
+  // Letter-number confusions (more likely OCR mistakes this way)
+  ['0', 'O'],
+  ['1', 'I'],
+  ['l', 'I'],
+  ['5', 'S'],
+  ['6', 'G'],
+  ['8', 'B'],
   
-  // Common letter confusions
-  ['rn', 'm'], ['m', 'rn'],
-  ['cl', 'd'], ['d', 'cl'],
-  ['li', 'h'], ['h', 'li'],
-  ['vv', 'w'], ['w', 'vv'],
+  // Common letter confusions (e.g., 'rn' is often a misread 'm')
+  ['rn', 'm'],
+  ['cl', 'd'],
+  ['li', 'h'],
+  ['vv', 'w'],
   ['nn', 'n'], 
   ['ii', 'i'],
   
@@ -130,31 +131,27 @@ function fixHyphenatedWords(text: string): string {
  * Uses a comprehensive mapping of frequently confused characters.
  */
 function correctCharacterErrors(text: string): string {
-  // PERFORMANCE OPTIMIZATION: Use single-pass string processing instead of multiple regex loops
-  // This reduces time complexity from O(n²) to O(n) for large documents
-  
-  // Pre-compile regex patterns for efficiency
-  const charRegexCache = new Map<string, RegExp>();
-  const termRegexCache = new Map<string, RegExp>();
-  
+  // PERFORMANCE OPTIMIZATION: Use single-pass string processing instead of multiple regex loops.
+  // This reduces time complexity from O(n*m) to O(n) for large documents.
   let corrected = text;
+
+  // 1. Single-pass for character corrections
+  const ocrKeys = Array.from(OCR_CHARACTER_CORRECTIONS.keys());
+  const escapedOcrKeys = ocrKeys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const ocrRegex = new RegExp(escapedOcrKeys.join('|'), 'g');
   
-  // Apply character corrections in batches to reduce regex overhead
-  for (const [wrong, right] of OCR_CHARACTER_CORRECTIONS) {
-    if (!charRegexCache.has(wrong)) {
-      charRegexCache.set(wrong, new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'));
-    }
-    corrected = corrected.replace(charRegexCache.get(wrong)!, right);
-  }
-  
-  // Apply business/legal term corrections with word boundaries
-  for (const [wrong, right] of BUSINESS_LEGAL_TERMS) {
-    if (!termRegexCache.has(wrong)) {
-      termRegexCache.set(wrong, new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'));
-    }
-    corrected = corrected.replace(termRegexCache.get(wrong)!, right);
-  }
-  
+  corrected = corrected.replace(ocrRegex, (match) => OCR_CHARACTER_CORRECTIONS.get(match)!);
+
+  // 2. Single-pass for business/legal term corrections (with word boundaries)
+  const termKeys = Array.from(BUSINESS_LEGAL_TERMS.keys());
+  const escapedTermKeys = termKeys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const termRegex = new RegExp(`\\b(${escapedTermKeys.join('|')})\\b`, 'gi');
+
+  corrected = corrected.replace(termRegex, (match) => {
+    // The map has lowercase keys, so we match case-insensitively and look up with the lowercase version.
+    return BUSINESS_LEGAL_TERMS.get(match.toLowerCase())!;
+  });
+
   return corrected;
 }
 
@@ -163,43 +160,10 @@ function correctCharacterErrors(text: string): string {
  * Processes corrections in batches to prevent event loop blocking.
  */
 async function correctCharacterErrorsAsync(text: string): Promise<string> {
-  // Pre-compile regex patterns for efficiency
-  const charRegexCache = new Map<string, RegExp>();
-  const termRegexCache = new Map<string, RegExp>();
-  
-  let corrected = text;
-  let processedCount = 0;
-  const YIELD_INTERVAL = 10; // Yield every 10 corrections
-  
-  // Apply character corrections in batches with yielding
-  for (const [wrong, right] of OCR_CHARACTER_CORRECTIONS) {
-    if (!charRegexCache.has(wrong)) {
-      charRegexCache.set(wrong, new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'));
-    }
-    corrected = corrected.replace(charRegexCache.get(wrong)!, right);
-    
-    processedCount++;
-    // Yield control periodically to prevent blocking
-    if (processedCount % YIELD_INTERVAL === 0) {
-      await new Promise(resolve => setTimeout(resolve, 0));
-    }
-  }
-  
-  // Apply business/legal term corrections with yielding
-  for (const [wrong, right] of BUSINESS_LEGAL_TERMS) {
-    if (!termRegexCache.has(wrong)) {
-      termRegexCache.set(wrong, new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'));
-    }
-    corrected = corrected.replace(termRegexCache.get(wrong)!, right);
-    
-    processedCount++;
-    // Yield control periodically to prevent blocking
-    if (processedCount % YIELD_INTERVAL === 0) {
-      await new Promise(resolve => setTimeout(resolve, 0));
-    }
-  }
-  
-  return corrected;
+  // This function is now a lightweight wrapper around the optimized synchronous version.
+  // The synchronous function is fast enough that fine-grained yielding is no longer required here.
+  // Yielding is still performed between major steps in the calling function `fixOcrErrorsAsync`.
+  return correctCharacterErrors(text);
 }
 
 /**
