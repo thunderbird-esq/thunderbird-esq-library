@@ -10,6 +10,7 @@
 .env*.local
 !.env.example
 !.env.template
+.env.local.backup
 
 # Dependencies & Lockfiles
 # These are installed via package managers and should not be in the repo.
