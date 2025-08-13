@@ -1,9 +1,10 @@
 {
-  "name": "thunderbird-esq-library",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
+    "name": "thunderbird-esq-library",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+    "dev": "npm run db:health && npm run start:dev-server",
+    "start:dev-server": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
