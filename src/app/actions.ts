@@ -550,7 +550,11 @@ export async function searchInternetArchive(topic: string): Promise<ActionResult
       throw new Error(`API call failed with status: ${response.status}`);
     }
     const data = await response.json();
-    return { success: true, data: data.response.docs };
+
+    // **FIX:** Check if 'response' and 'docs' exist before accessing them.
+    const documents = data.response?.docs || [];
+
+    return { success: true, data: documents };
   } catch (error) {
     console.error('Error searching Internet Archive:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
