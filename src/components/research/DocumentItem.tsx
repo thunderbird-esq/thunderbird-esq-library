@@ -13,7 +13,7 @@ type Document = {
   identifier: string; title: string; creator?: string; date?: string; format?: string[];
 };
 
-type IngestionState = 'idle' | 'fetching' | 'processing' | 'embedding' | 'success' | 'failed';
+type IngestionState = 'idle' | 'downloading' | 'processing' | 'storing' | 'ingested' | 'failed';
 
 type InternetArchiveFile = {
   format?: string;
@@ -211,7 +211,7 @@ export function DocumentItem({ doc }: { doc: Document }) {
 
   const handleSimpleIngest = async () => {
     setMessage('');
-    setIngestState('fetching');
+    setIngestState('downloading');
     setMessage('Downloading text file in browser...');
 
     try {
@@ -219,7 +219,7 @@ export function DocumentItem({ doc }: { doc: Document }) {
       const rawText = await downloadFileWithRetry(doc.identifier, filename, 'text') as string;
 
       setIngestState('processing');
-      setMessage('Text downloaded. Processing on server...');
+      setMessage('Processing text on server...');
       setProcessingProgress(0);
       
       const progressCallback = (progress: { stage: string; percent: number; message: string }) => {
@@ -232,11 +232,11 @@ export function DocumentItem({ doc }: { doc: Document }) {
         throw new Error(chunkResult.error || 'Failed to process text on server.');
       }
 
-      setIngestState('embedding');
+      setIngestState('storing');
       setMessage(`Found ${chunkResult.data.length} chunks. Storing...`);
       const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
       if (storeResult.success) {
-        setIngestState('success');
+        setIngestState('ingested');
         setMessage(`Ingested ${storeResult.data} chunks.`);
       } else {
         throw new Error(storeResult.error || 'Storage failed.');
@@ -260,7 +260,7 @@ export function DocumentItem({ doc }: { doc: Document }) {
 
   const handleAdvancedIngest = async () => {
     setMessage('');
-    setIngestState('fetching');
+    setIngestState('downloading');
     setMessage('Downloading PDF in browser...');
 
     try {
@@ -268,7 +268,7 @@ export function DocumentItem({ doc }: { doc: Document }) {
       const buffer = await downloadFileWithRetry(doc.identifier, filename, 'binary');
 
       setIngestState('processing');
-      setMessage('PDF downloaded. Processing on server...');
+      setMessage('Processing PDF on server...');
       setProcessingProgress(0);
       
       const progressCallback = (progress: { stage: string; percent: number; message: string }) => {
@@ -281,11 +281,11 @@ export function DocumentItem({ doc }: { doc: Document }) {
         throw new Error(chunkResult.error || 'Failed to process PDF on server.');
       }
 
-      setIngestState('embedding');
+      setIngestState('storing');
       setMessage(`Found ${chunkResult.data.length} chunks. Storing...`);
       const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
       if (storeResult.success) {
-        setIngestState('success');
+        setIngestState('ingested');
         setMessage(`Ingested ${storeResult.data} chunks.`);
       } else {
         throw new Error(storeResult.error || 'Storage failed.');
@@ -307,8 +307,8 @@ export function DocumentItem({ doc }: { doc: Document }) {
     }
   };
   
-  const isWorking = ['fetching', 'processing', 'embedding'].includes(ingestState);
-  const isDone = ingestState === 'success';
+  const isWorking = ['downloading', 'processing', 'storing'].includes(ingestState);
+  const isDone = ingestState === 'ingested';
 
   return (
     <li className="p-3 border rounded-md flex justify-between items-start min-h-[88px] gap-4">
@@ -320,10 +320,11 @@ export function DocumentItem({ doc }: { doc: Document }) {
         {message && (
           <div className="mt-1">
             <p className={`text-xs font-bold ${
-                ingestState === 'success' ? 'text-green-500' 
+                ingestState === 'ingested' ? 'text-green-500' 
                 : ingestState === 'failed' ? 'text-red-500' 
                 : 'text-blue-500'
               }`}
+              data-testid="ingestion-status"
             >
               {message}
             </p>
@@ -340,12 +341,12 @@ export function DocumentItem({ doc }: { doc: Document }) {
       </div>
       <div className="flex flex-col gap-2 items-end flex-shrink-0">
         {availableMethods.hasSimpleText && (
-          <Button variant="outline" size="sm" onClick={handleSimpleIngest} disabled={isWorking || isDone}>
+          <Button variant="outline" size="sm" onClick={handleSimpleIngest} disabled={isWorking || isDone} data-testid="ingest-text">
             {isWorking ? 'Processing...' : isDone ? 'Ingested' : 'Ingest Text'}
           </Button>
         )}
         {availableMethods.hasPdf && (
-          <Button variant="secondary" size="sm" onClick={handleAdvancedIngest} disabled={isWorking || isDone}>
+          <Button variant="secondary" size="sm" onClick={handleAdvancedIngest} disabled={isWorking || isDone} data-testid="ingest-pdf">
             {isWorking ? 'Processing...' : isDone ? 'Ingested' : 'Ingest PDF'}
           </Button>
         )}

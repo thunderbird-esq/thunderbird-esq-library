@@ -1,0 +1,68 @@
+{
+  "internetArchive": {
+    "searchResults": [
+      {
+        "identifier": "sample-document-001",
+        "title": "Test Document for E2E Testing",
+        "description": "A sample document used for testing document ingestion pipeline",
+        "mediatype": "texts",
+        "collection": ["test-collection"],
+        "creator": "Test Author",
+        "date": "2023-01-01",
+        "language": "eng",
+        "subject": ["testing", "sample", "document"],
+        "downloads": 100,
+        "files": [
+          {
+            "name": "sample-document.pdf",
+            "size": "1024000",
+            "format": "PDF"
+          },
+          {
+            "name": "sample-document.txt",
+            "size": "10240",
+            "format": "Text"
+          }
+        ]
+      }
+    ]
+  },
+  "sampleTexts": {
+    "shortText": "This is a short test document for ingestion testing. It contains basic content to verify text processing works correctly.",
+    "mediumText": "This is a medium-length test document designed for comprehensive ingestion pipeline testing. It includes multiple paragraphs to test chunking functionality. The document covers various topics including artificial intelligence, machine learning, and natural language processing. This content should be sufficient to generate meaningful embeddings and test the vector search capabilities of the RAG system.",
+    "longText": "This is an extensive test document designed for thorough testing of the document ingestion and processing pipeline. It contains multiple sections and paragraphs that will test the system's ability to handle longer content effectively. The document discusses various technical topics including software architecture, database design, and API development patterns. Section 1: Introduction to Software Architecture. Software architecture is the fundamental structure of a software system, defining how components interact and relate to each other. It serves as a blueprint for both the system and the project development team. Section 2: Database Design Principles. Effective database design is crucial for application performance and maintainability. Key principles include normalization, indexing strategies, and query optimization. Section 3: API Development Best Practices. RESTful API design follows specific conventions that make services predictable and easy to use. This includes proper use of HTTP methods, status codes, and resource naming conventions."
+  },
+  "testQueries": [
+    {
+      "query": "What is software architecture?",
+      "expectedContext": "software architecture",
+      "category": "technical"
+    },
+    {
+      "query": "How does database design impact performance?",
+      "expectedContext": "database design",
+      "category": "technical"
+    },
+    {
+      "query": "What are RESTful API conventions?",
+      "expectedContext": "API development",
+      "category": "technical"
+    }
+  ],
+  "errorScenarios": {
+    "invalidUrls": [
+      "https://archive.org/download/nonexistent-doc/test.pdf",
+      "https://invalid-domain.com/test.pdf"
+    ],
+    "malformedRequests": [
+      {
+        "description": "Empty search query",
+        "query": ""
+      },
+      {
+        "description": "Invalid file format",
+        "fileType": "invalid"
+      }
+    ]
+  }
+}

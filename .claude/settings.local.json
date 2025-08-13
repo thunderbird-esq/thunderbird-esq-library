@@ -22,7 +22,15 @@
       "Bash(docker:*)",
       "Bash(supabase start:*)",
       "Bash(supabase db inspect:*)",
-      "Bash(supabase migration:*)"
+      "Bash(supabase migration:*)",
+      "Bash(npm test:*)",
+      "Bash(/dev/null)",
+      "Bash(npm run:*)",
+      "Bash(supabase db psql:*)",
+      "Bash(timeout 15 npm run start:dev-server)",
+      "Bash(supabase:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/db-health-check.sh:*)"
     ],
     "deny": []
   }

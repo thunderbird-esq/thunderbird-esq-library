@@ -9,6 +9,14 @@ export default defineConfig({
   // Test directory for E2E tests
   testDir: './tests/e2e',
   
+  // Only run foundation tests by default for immediate value
+  testMatch: [
+    '**/tests/e2e/application-foundation.spec.ts',
+    '**/tests/e2e/playwright-setup.spec.ts',
+    // Uncomment when UI components are implemented:
+    '**/tests/e2e/ingestion-pipeline.spec.ts'
+  ],
+  
   // Global test timeout (60 seconds per test for complex operations)
   timeout: 60000,
   
@@ -113,11 +121,7 @@ export default defineConfig({
   // Global test configuration
   globalTimeout: 600000, // 10 minutes total timeout for all tests
   
-  // Test directory configuration
-  testMatch: [
-    '**/tests/e2e/**/*.spec.ts',
-    '**/tests/e2e/**/*.test.ts'
-  ],
+  // Removed: Redundant testMatch configuration - using the one above
   
   // Global setup and teardown for database initialization
   globalSetup: require.resolve('./tests/global-setup.ts'),

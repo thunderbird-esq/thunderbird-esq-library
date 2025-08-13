@@ -1,11 +1,11 @@
 {
   "config": {
-    "configFile": "/app/playwright.config.ts",
-    "rootDir": "/app/tests/e2e",
+    "configFile": "/Users/michaelraftery/thunderbird-esq-library/playwright.config.ts",
+    "rootDir": "/Users/michaelraftery/thunderbird-esq-library/tests/e2e",
     "forbidOnly": false,
     "fullyParallel": true,
-    "globalSetup": "/app/tests/global-setup.ts",
-    "globalTeardown": "/app/tests/global-teardown.ts",
+    "globalSetup": "/Users/michaelraftery/thunderbird-esq-library/tests/global-setup.ts",
+    "globalTeardown": "/Users/michaelraftery/thunderbird-esq-library/tests/global-teardown.ts",
     "globalTimeout": 600000,
     "grep": {},
     "grepInvert": null,
@@ -13,7 +13,7 @@
     "metadata": {
       "testEnvironment": "local-supabase",
       "nodeVersion": "v22.17.1",
-      "os": "linux"
+      "os": "darwin"
     },
     "preserveOutput": "failures-only",
     "reporter": [
@@ -52,23 +52,23 @@
     "quiet": false,
     "projects": [
       {
-        "outputDir": "/app/test-results",
+        "outputDir": "/Users/michaelraftery/thunderbird-esq-library/test-results",
         "repeatEach": 1,
         "retries": 1,
         "metadata": {
           "testEnvironment": "local-supabase",
           "nodeVersion": "v22.17.1",
-          "os": "linux"
+          "os": "darwin"
         },
         "id": "firefox",
         "name": "firefox",
-        "testDir": "/app/tests/e2e",
+        "testDir": "/Users/michaelraftery/thunderbird-esq-library/tests/e2e",
         "testIgnore": [],
         "testMatch": [
-          "**/tests/e2e/**/*.spec.ts",
-          "**/tests/e2e/**/*.test.ts"
+          "**/tests/e2e/application-foundation.spec.ts",
+          "**/tests/e2e/playwright-setup.spec.ts"
         ],
-        "timeout": 60000
+        "timeout": 120000
       }
     ],
     "shard": null,
@@ -92,13 +92,13 @@
   "suites": [],
   "errors": [
     {
-      "message": "Error: Process from config.webServer was not able to start. Exit code: 1",
-      "stack": "Error: Process from config.webServer was not able to start. Exit code: 1"
+      "message": "Error: No tests found.\nMake sure that arguments are regular expressions matching test files.\nYou may need to escape symbols like \"$\" or \"*\" and quote the arguments.",
+      "stack": "Error: No tests found.\nMake sure that arguments are regular expressions matching test files.\nYou may need to escape symbols like \"$\" or \"*\" and quote the arguments."
     }
   ],
   "stats": {
-    "startTime": "2025-08-12T04:36:53.660Z",
-    "duration": 14620.284,
+    "startTime": "2025-08-13T19:58:35.448Z",
+    "duration": 9344.516,
     "expected": 0,
     "skipped": 0,
     "unexpected": 0,
