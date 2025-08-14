@@ -124,7 +124,7 @@ class TestHelpers {
   }
 
   /**
-   * Finds element using multiple possible selectors
+   * Finds element using multiple possible selectors with intelligent fallback
    */
   async findElementWithMultipleSelectors(selectors: string[]) {
     for (const selector of selectors) {
@@ -143,6 +143,97 @@ class TestHelpers {
     // If no selector worked, take a screenshot and fail
     await this.page.screenshot({ path: 'test-results/selector-failure.png', fullPage: true });
     throw new Error(`Could not find element with any of these selectors: ${selectors.join(', ')}`);
+  }
+
+  /**
+   * Dynamically detects if UI components are available for testing
+   * Returns capability assessment instead of hard-coded assumptions
+   */
+  async detectUICapabilities(): Promise<{
+    hasSearchInterface: boolean;
+    hasIngestionButtons: boolean;
+    hasChatInterface: boolean;
+    hasDocumentList: boolean;
+    overallScore: number;
+  }> {
+    console.log('🔍 Performing dynamic UI capability detection...');
+    
+    const capabilities = {
+      hasSearchInterface: false,
+      hasIngestionButtons: false,
+      hasChatInterface: false,
+      hasDocumentList: false,
+      overallScore: 0
+    };
+
+    // Test for search interface
+    try {
+      const searchElements = await Promise.race([
+        this.page.locator(TEST_SELECTORS.SEARCH_INPUT).count(),
+        this.page.locator('input[type="text"]').count(),
+        this.page.locator('input[placeholder*="search" i]').count()
+      ]);
+      capabilities.hasSearchInterface = searchElements > 0;
+      console.log(`Search interface detected: ${capabilities.hasSearchInterface}`);
+    } catch (error) {
+      console.log('Search interface detection failed:', error.message);
+    }
+
+    // Test for ingestion buttons (may not be visible until search results)
+    try {
+      const ingestElements = await Promise.race([
+        this.page.locator('[data-testid*="ingest"]').count(),
+        this.page.locator('button:has-text("Ingest")').count(),
+        this.page.locator('button:has-text("PDF")').count()
+      ]);
+      capabilities.hasIngestionButtons = ingestElements > 0;
+      console.log(`Ingestion buttons detected: ${capabilities.hasIngestionButtons}`);
+    } catch (error) {
+      console.log('Ingestion buttons detection failed:', error.message);
+    }
+
+    // Test for chat interface
+    try {
+      const chatElements = await Promise.race([
+        this.page.locator(TEST_SELECTORS.CHAT_INPUT).count(),
+        this.page.locator('textarea').count(),
+        this.page.locator('input[placeholder*="question" i]').count()
+      ]);
+      capabilities.hasChatInterface = chatElements > 0;
+      console.log(`Chat interface detected: ${capabilities.hasChatInterface}`);
+    } catch (error) {
+      console.log('Chat interface detection failed:', error.message);
+    }
+
+    // Test for document list area
+    try {
+      const docElements = await Promise.race([
+        this.page.locator('[data-testid="search-results"]').count(),
+        this.page.locator('[class*="document"]').count(),
+        this.page.locator('li').count()
+      ]);
+      capabilities.hasDocumentList = docElements > 0;
+      console.log(`Document list area detected: ${capabilities.hasDocumentList}`);
+    } catch (error) {
+      console.log('Document list detection failed:', error.message);
+    }
+
+    // Calculate overall capability score
+    const scores = [
+      capabilities.hasSearchInterface ? 25 : 0,
+      capabilities.hasIngestionButtons ? 25 : 0,
+      capabilities.hasChatInterface ? 25 : 0,
+      capabilities.hasDocumentList ? 25 : 0
+    ];
+    capabilities.overallScore = scores.reduce((sum, score) => sum + score, 0);
+
+    console.log(`🎯 UI Capability Assessment Complete - Score: ${capabilities.overallScore}/100`);
+    console.log(`  - Search Interface: ${capabilities.hasSearchInterface ? '✅' : '❌'}`);
+    console.log(`  - Ingestion Buttons: ${capabilities.hasIngestionButtons ? '✅' : '❌'}`);
+    console.log(`  - Chat Interface: ${capabilities.hasChatInterface ? '✅' : '❌'}`);
+    console.log(`  - Document List: ${capabilities.hasDocumentList ? '✅' : '❌'}`);
+
+    return capabilities;
   }
 
   /**
@@ -392,17 +483,14 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
   test('Internet Archive Integration - Real Search API', async ({ page }) => {
     console.log('🔍 Testing Internet Archive search integration...');
 
-    // Check if the application has search interface components
-    try {
-      await helpers.searchInternetArchive('artificial intelligence');
-      console.log('✅ Internet Archive search completed successfully');
-    } catch (error) {
-      console.log('❌ Search interface not found. Checking if components are rendered...');
+    // Perform dynamic UI capability detection
+    const capabilities = await helpers.detectUICapabilities();
+    
+    if (!capabilities.hasSearchInterface) {
+      console.log('⚠️ Search interface not detected. Investigating page state...');
       
-      // Check what's actually rendered on the page
-      const pageContent = await page.content();
+      // Capture diagnostic information for debugging
       const bodyText = await page.locator('body').textContent();
-      
       console.log('Page title:', await page.title());
       console.log('Body text preview:', bodyText?.substring(0, 500));
       
@@ -410,23 +498,54 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
       const hasReactComponents = bodyText?.includes('Step') || bodyText?.includes('Search') || bodyText?.includes('Chat');
       
       if (!hasReactComponents) {
-        console.log('⚠️ Expected React components not found. The main page might not be properly wired up.');
-        console.log('This suggests the main page.tsx is still showing the Next.js default template.');
+        console.log('❌ Expected React components not found. The main page appears to be the default Next.js template.');
+        console.log('DIAGNOSIS: Application interface is not properly wired up.');
         
-        // This is expected based on the current state - mark as known issue
-        test.skip(true, 'Search interface components are not rendered in the current UI');
-      } else {
-        throw error; // Re-throw if components exist but selectors failed
+        // Fail the test with clear diagnostic information
+        throw new Error('CRITICAL: Search interface components are not rendered. Application UI is not functional.');
       }
+      
+      // If React components exist but search interface is still missing, fail with different error
+      throw new Error('CRITICAL: React components detected but search interface selectors failed. UI component mismatch.');
+    }
+
+    // If search interface is available, proceed with the test
+    try {
+      await helpers.searchInternetArchive('artificial intelligence');
+      console.log('✅ Internet Archive search completed successfully');
+    } catch (error) {
+      console.log('❌ Search execution failed:', error.message);
+      throw error;
     }
   });
 
   test('Document Ingestion Pipeline - PDF Processing', async ({ page }) => {
     console.log('🔍 Testing PDF document ingestion pipeline...');
 
+    // Perform dynamic capability assessment
+    const capabilities = await helpers.detectUICapabilities();
+    
+    if (!capabilities.hasSearchInterface) {
+      throw new Error('CRITICAL: Search interface required for PDF ingestion test is not available.');
+    }
+
     try {
       // First, ensure we have search results
       await helpers.searchInternetArchive('machine learning');
+      
+      // Check for ingestion capability after search results load
+      const postSearchCapabilities = await helpers.detectUICapabilities();
+      
+      if (!postSearchCapabilities.hasIngestionButtons) {
+        console.log('⚠️ Ingestion buttons not detected after search. Checking if search returned results...');
+        
+        const resultCount = await page.locator(TEST_SELECTORS.SEARCH_RESULTS).count();
+        if (resultCount === 0) {
+          throw new Error('CRITICAL: Search completed but returned no results. Cannot test PDF ingestion without documents.');
+        }
+        
+        throw new Error('CRITICAL: Search returned results but PDF ingestion buttons are not accessible.');
+      }
       
       // Find and ingest a PDF document
       await helpers.ingestDocument('pdf');
@@ -437,21 +556,38 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
       await expect(successMessage).toBeVisible();
       
     } catch (error) {
-      if (error.message.includes('Could not find element')) {
-        console.log('⚠️ PDF ingestion interface not available');
-        test.skip(true, 'PDF ingestion UI components not accessible');
-      } else {
-        throw error;
-      }
+      console.log('❌ PDF ingestion pipeline failed:', error.message);
+      throw error;
     }
   });
 
   test('Document Ingestion Pipeline - Text Processing', async ({ page }) => {
     console.log('🔍 Testing text document ingestion pipeline...');
 
+    // Perform dynamic capability assessment
+    const capabilities = await helpers.detectUICapabilities();
+    
+    if (!capabilities.hasSearchInterface) {
+      throw new Error('CRITICAL: Search interface required for text ingestion test is not available.');
+    }
+
     try {
       // Search for documents that likely have text versions
       await helpers.searchInternetArchive('open source software');
+      
+      // Check for ingestion capability after search results load
+      const postSearchCapabilities = await helpers.detectUICapabilities();
+      
+      if (!postSearchCapabilities.hasIngestionButtons) {
+        console.log('⚠️ Ingestion buttons not detected after search. Verifying search results...');
+        
+        const resultCount = await page.locator(TEST_SELECTORS.SEARCH_RESULTS).count();
+        if (resultCount === 0) {
+          throw new Error('CRITICAL: Search completed but returned no results. Cannot test text ingestion without documents.');
+        }
+        
+        throw new Error('CRITICAL: Search returned results but text ingestion buttons are not accessible.');
+      }
       
       // Find and ingest a text document
       await helpers.ingestDocument('text');
@@ -462,24 +598,41 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
       await expect(successMessage).toBeVisible();
 
     } catch (error) {
-      if (error.message.includes('Could not find element')) {
-        console.log('⚠️ Text ingestion interface not available');
-        test.skip(true, 'Text ingestion UI components not accessible');
-      } else {
-        throw error;
-      }
+      console.log('❌ Text ingestion pipeline failed:', error.message);
+      throw error;
     }
   });
 
   test('RAG Query System - Real Embeddings and Chat', async ({ page }) => {
     console.log('🔍 Testing RAG query system with real embeddings...');
 
+    // Perform comprehensive capability assessment
+    const capabilities = await helpers.detectUICapabilities();
+    
+    if (!capabilities.hasSearchInterface) {
+      throw new Error('CRITICAL: Search interface required for RAG testing is not available.');
+    }
+    
+    if (!capabilities.hasChatInterface) {
+      throw new Error('CRITICAL: Chat interface required for RAG testing is not available.');
+    }
+
     try {
       // First ingest a document
+      console.log('Step 1: Searching for documents...');
       await helpers.searchInternetArchive('computer science');
+      
+      // Verify ingestion capability exists
+      const postSearchCapabilities = await helpers.detectUICapabilities();
+      if (!postSearchCapabilities.hasIngestionButtons) {
+        throw new Error('CRITICAL: Ingestion buttons not available after search. Cannot ingest documents for RAG testing.');
+      }
+      
+      console.log('Step 2: Ingesting document for RAG...');
       await helpers.ingestDocument('text'); // Try text first as it's usually faster
       
       // Test RAG query
+      console.log('Step 3: Testing RAG query...');
       const response = await helpers.testRAGQuery('What is artificial intelligence?');
       
       // Verify response quality
@@ -491,12 +644,8 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
       console.log(`Response preview: "${response.substring(0, 200)}..."`);
 
     } catch (error) {
-      if (error.message.includes('Could not find element')) {
-        console.log('⚠️ Chat interface not available');
-        test.skip(true, 'RAG chat UI components not accessible');
-      } else {
-        throw error;
-      }
+      console.log('❌ RAG query system failed:', error.message);
+      throw error;
     }
   });
 
@@ -550,6 +699,13 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
     // Test multiple searches in sequence
     const searchTerms = ['artificial intelligence', 'machine learning', 'data science'];
     
+    // Perform capability assessment before starting performance tests
+    const capabilities = await helpers.detectUICapabilities();
+    
+    if (!capabilities.hasSearchInterface) {
+      throw new Error('CRITICAL: Search interface required for performance testing is not available.');
+    }
+
     for (const term of searchTerms) {
       try {
         console.log(`Testing search for: ${term}`);
@@ -560,12 +716,8 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
         console.log(`✅ Search for "${term}" completed`);
         
       } catch (error) {
-        if (error.message.includes('Could not find element')) {
-          console.log('⚠️ Search interface not available');
-          test.skip(true, 'Search interface not accessible for performance testing');
-        } else {
-          throw error;
-        }
+        console.log(`❌ Search for "${term}" failed:`, error.message);
+        throw error;
       }
     }
 
@@ -575,10 +727,30 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
   test('Full End-to-End Workflow - Complete User Journey', async ({ page }) => {
     console.log('🔍 Testing complete user journey from search to chat...');
 
+    // Perform comprehensive pre-flight capability assessment
+    const capabilities = await helpers.detectUICapabilities();
+    
+    console.log(`🎯 Workflow Prerequisites Check - UI Score: ${capabilities.overallScore}/100`);
+    
+    // Verify all required capabilities are present
+    const missingCapabilities = [];
+    if (!capabilities.hasSearchInterface) missingCapabilities.push('Search Interface');
+    if (!capabilities.hasChatInterface) missingCapabilities.push('Chat Interface');
+    
+    if (missingCapabilities.length > 0) {
+      throw new Error(`CRITICAL: Complete workflow requires all UI components. Missing: ${missingCapabilities.join(', ')}. Application interface is not functional.`);
+    }
+
     try {
       // Step 1: Search Internet Archive
       console.log('Step 1: Searching Internet Archive...');
       await helpers.searchInternetArchive('philosophy logic');
+
+      // Step 1.5: Verify post-search capabilities
+      const postSearchCapabilities = await helpers.detectUICapabilities();
+      if (!postSearchCapabilities.hasIngestionButtons) {
+        throw new Error('CRITICAL: Search completed but ingestion buttons not available. Cannot proceed with workflow.');
+      }
 
       // Step 2: Ingest a document
       console.log('Step 2: Ingesting document...');
@@ -601,16 +773,8 @@ test.describe('Thunderbird-ESQ Ingestion Pipeline E2E Tests', () => {
 
     } catch (error) {
       await helpers.captureApplicationState('complete-workflow-failure');
-      
-      if (error.message.includes('Could not find element')) {
-        console.log('❌ Complete workflow test failed: UI components not accessible');
-        console.log('This indicates the main application interface is not properly rendered.');
-        console.log('Expected behavior: The app should show search input, document list, and chat interface.');
-        
-        test.skip(true, 'Complete workflow requires functional UI components');
-      } else {
-        throw error;
-      }
+      console.log('❌ Complete end-to-end workflow failed:', error.message);
+      throw error;
     }
   });
 
@@ -693,6 +857,7 @@ test.describe('Database Integration Tests', () => {
         console.log('⚠️ UI not available for storage testing');
         
         // Alternative: Test API directly
+        console.log('⚠️ UI not available, testing storage via API...');
         const apiTest = await page.request.post('/api/chat', {
           data: {
             messages: [{ role: 'user', content: 'test storage' }]
@@ -700,8 +865,9 @@ test.describe('Database Integration Tests', () => {
         });
         
         expect(apiTest.status()).not.toBe(500);
-        console.log('✅ Database API accessible');
-        test.skip(true, 'UI components required for full storage testing');
+        console.log('✅ Database API accessible but full storage testing requires UI components');
+        
+        throw new Error('PARTIAL: Database API accessible but UI components required for comprehensive storage testing');
       } else {
         throw error;
       }

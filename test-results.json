@@ -92,251 +92,6 @@
   },
   "suites": [
     {
-      "title": "application-foundation.spec.ts",
-      "file": "application-foundation.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [],
-      "suites": [
-        {
-          "title": "Application Foundation - Core Infrastructure",
-          "file": "application-foundation.spec.ts",
-          "line": 16,
-          "column": 6,
-          "specs": [
-            {
-              "title": "Application loads successfully with all required assets",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-8550bf72bc89f69b89cc",
-              "file": "application-foundation.spec.ts",
-              "line": 18,
-              "column": 7
-            },
-            {
-              "title": "React hydration and interactivity work correctly",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-d6e5926e1ef3fe7aed23",
-              "file": "application-foundation.spec.ts",
-              "line": 47,
-              "column": 7
-            },
-            {
-              "title": "API endpoints are accessible and respond correctly",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-d7bf6a91f63c448e9c28",
-              "file": "application-foundation.spec.ts",
-              "line": 76,
-              "column": 7
-            },
-            {
-              "title": "Environment configuration is correct for testing",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-2f5ae3fa755f188d4a22",
-              "file": "application-foundation.spec.ts",
-              "line": 103,
-              "column": 7
-            },
-            {
-              "title": "Database connectivity through server actions",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-888495b38f2da271febb",
-              "file": "application-foundation.spec.ts",
-              "line": 122,
-              "column": 7
-            },
-            {
-              "title": "Application performance and loading times",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-1ee822e6fd92b7cf3b4a",
-              "file": "application-foundation.spec.ts",
-              "line": 161,
-              "column": 7
-            },
-            {
-              "title": "Browser compatibility and feature detection",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-d62b461071ad70618c70",
-              "file": "application-foundation.spec.ts",
-              "line": 188,
-              "column": 7
-            },
-            {
-              "title": "Error boundary and error handling",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-198953b5f3de9b61977c",
-              "file": "application-foundation.spec.ts",
-              "line": 216,
-              "column": 7
-            }
-          ]
-        },
-        {
-          "title": "Application Features - Adaptive Component Testing",
-          "file": "application-foundation.spec.ts",
-          "line": 260,
-          "column": 6,
-          "specs": [
-            {
-              "title": "Discover and test available interactive components",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-3db31e45a39854396fc4",
-              "file": "application-foundation.spec.ts",
-              "line": 262,
-              "column": 7
-            },
-            {
-              "title": "Test navigation and routing capabilities",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-56bbfea3e199c813fbec",
-              "file": "application-foundation.spec.ts",
-              "line": 329,
-              "column": 7
-            },
-            {
-              "title": "Responsive design and viewport adaptation",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "98bf0bf871a1a6155d49-032a762f8731f78fb233",
-              "file": "application-foundation.spec.ts",
-              "line": 362,
-              "column": 7
-            }
-          ]
-        }
-      ]
-    },
-    {
       "title": "ingestion-pipeline.spec.ts",
       "file": "ingestion-pipeline.spec.ts",
       "column": 0,
@@ -346,7 +101,7 @@
         {
           "title": "Thunderbird-ESQ Ingestion Pipeline E2E Tests",
           "file": "ingestion-pipeline.spec.ts",
-          "line": 324,
+          "line": 415,
           "column": 6,
           "specs": [
             {
@@ -366,7 +121,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-3c62e519eab57da220f8",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 348,
+              "line": 439,
               "column": 7
             },
             {
@@ -386,7 +141,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-2a52a498e221e4a0db31",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 392,
+              "line": 483,
               "column": 7
             },
             {
@@ -406,7 +161,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-eb313e837add08c86394",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 424,
+              "line": 522,
               "column": 7
             },
             {
@@ -426,7 +181,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-8b3dc4646475b6ee62ec",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 449,
+              "line": 564,
               "column": 7
             },
             {
@@ -446,7 +201,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-55929726d372742ea5ee",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 474,
+              "line": 606,
               "column": 7
             },
             {
@@ -466,7 +221,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-5031f86bae4f4df5b755",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 503,
+              "line": 652,
               "column": 7
             },
             {
@@ -486,7 +241,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-bba589aa96665c7837ce",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 547,
+              "line": 696,
               "column": 7
             },
             {
@@ -506,7 +261,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-72b883f75572c8ab78d4",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 575,
+              "line": 727,
               "column": 7
             }
           ]
@@ -514,7 +269,7 @@
         {
           "title": "Database Integration Tests",
           "file": "ingestion-pipeline.spec.ts",
-          "line": 634,
+          "line": 798,
           "column": 6,
           "specs": [
             {
@@ -534,7 +289,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-885289d3b9f0422dc379",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 635,
+              "line": 799,
               "column": 7
             },
             {
@@ -554,64 +309,7 @@
               ],
               "id": "0dd9126fc8cbaedb240c-27973d37b70e06c965f1",
               "file": "ingestion-pipeline.spec.ts",
-              "line": 670,
-              "column": 7
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "title": "playwright-setup.spec.ts",
-      "file": "playwright-setup.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [],
-      "suites": [
-        {
-          "title": "Playwright Infrastructure Validation",
-          "file": "playwright-setup.spec.ts",
-          "line": 8,
-          "column": 6,
-          "specs": [
-            {
-              "title": "should initialize browser context successfully",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "ed008c2b1708a711bef0-419870ba4d4d291353f6",
-              "file": "playwright-setup.spec.ts",
-              "line": 9,
-              "column": 7
-            },
-            {
-              "title": "should support basic DOM interactions",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "firefox",
-                  "projectName": "firefox",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "ed008c2b1708a711bef0-f87c08a6e829edc29869",
-              "file": "playwright-setup.spec.ts",
-              "line": 30,
+              "line": 834,
               "column": 7
             }
           ]
@@ -621,10 +319,10 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2025-08-14T00:29:14.866Z",
-    "duration": 46.968000000000075,
+    "startTime": "2025-08-14T01:04:25.252Z",
+    "duration": 261.8409999999999,
     "expected": 0,
-    "skipped": 23,
+    "skipped": 10,
     "unexpected": 0,
     "flaky": 0
   }
