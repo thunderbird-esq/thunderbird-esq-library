@@ -213,6 +213,8 @@ export function DocumentItem({ doc }: { doc: Document }) {
     setMessage('');
     setIngestState('downloading');
     setMessage('Downloading text file in browser...');
+    
+    let progressInterval: NodeJS.Timeout | null = null;
 
     try {
       const filename = await getFilename(doc.identifier, ['Text', 'DjVuTXT']);
@@ -222,12 +224,16 @@ export function DocumentItem({ doc }: { doc: Document }) {
       setMessage('Processing text on server...');
       setProcessingProgress(0);
       
-      const progressCallback = (progress: { stage: string; percent: number; message: string }) => {
-        setProcessingProgress(progress.percent);
-        setMessage(`${progress.message} (${progress.percent}%)`);
-      };
+      // Client-side progress simulation for better UX
+      progressInterval = setInterval(() => {
+        setProcessingProgress(prev => Math.min(prev + 5, 80));
+      }, 500);
       
-      const chunkResult = await processRawText(rawText, 10000, progressCallback);
+      const chunkResult = await processRawText(rawText, 10000);
+      clearInterval(progressInterval);
+      progressInterval = null;
+      setProcessingProgress(100);
+      
       if (!chunkResult.success || !chunkResult.data) {
         throw new Error(chunkResult.error || 'Failed to process text on server.');
       }
@@ -242,6 +248,9 @@ export function DocumentItem({ doc }: { doc: Document }) {
         throw new Error(storeResult.error || 'Storage failed.');
       }
     } catch (error) {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       setIngestState('failed');
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       
@@ -262,6 +271,8 @@ export function DocumentItem({ doc }: { doc: Document }) {
     setMessage('');
     setIngestState('downloading');
     setMessage('Downloading PDF in browser...');
+    
+    let progressInterval: NodeJS.Timeout | null = null;
 
     try {
       const filename = await getFilename(doc.identifier, ['Abbyy GZ', 'PDF']);
@@ -271,12 +282,15 @@ export function DocumentItem({ doc }: { doc: Document }) {
       setMessage('Processing PDF on server...');
       setProcessingProgress(0);
       
-      const progressCallback = (progress: { stage: string; percent: number; message: string }) => {
-        setProcessingProgress(progress.percent);
-        setMessage(`${progress.message} (${progress.percent}%)`);
-      };
+      // Client-side progress simulation for better UX
+      progressInterval = setInterval(() => {
+        setProcessingProgress(prev => Math.min(prev + 5, 70));
+      }, 800);
       
-      const chunkResult = await processArrayBuffer(buffer as ArrayBuffer, 30000, progressCallback);
+      const chunkResult = await processArrayBuffer(buffer as ArrayBuffer, 30000);
+      clearInterval(progressInterval);
+      progressInterval = null;
+      setProcessingProgress(100);
       if (!chunkResult.success || !chunkResult.data) {
         throw new Error(chunkResult.error || 'Failed to process PDF on server.');
       }
@@ -291,6 +305,9 @@ export function DocumentItem({ doc }: { doc: Document }) {
         throw new Error(storeResult.error || 'Storage failed.');
       }
     } catch (error) {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       setIngestState('failed');
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       

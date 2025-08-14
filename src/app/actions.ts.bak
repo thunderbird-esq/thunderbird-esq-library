@@ -84,6 +84,7 @@ export async function processRawText(
       
       const cleanedText = rawText.replace(/-\n/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
+      progressCallback?.({ stage: 'chunking', percent: 50, message: 'Creating text chunks' });
       
       const chunkSize = 500;
       const chunkOverlap = 50;
@@ -98,9 +99,16 @@ export async function processRawText(
         // Yield control every BATCH_SIZE chunks to prevent blocking
         if (chunks.length % BATCH_SIZE === 0) {
           await new Promise(resolve => setTimeout(resolve, 0));
+          const progress = Math.min(90, 50 + (chunks.length / Math.ceil(words.length / (chunkSize - chunkOverlap))) * 40);
+          progressCallback?.({ 
+            stage: 'chunking', 
+            percent: Math.round(progress), 
+            message: `Created ${chunks.length} chunks` 
+          });
         }
       }
       
+      progressCallback?.({ stage: 'complete', percent: 100, message: `Processing complete: ${chunks.length} chunks created` });
       return { success: true, data: chunks };
 
     } catch (processingError) {
@@ -119,6 +127,7 @@ export async function processRawText(
     
     // If timeout, provide graceful fallback with basic processing
     if (errorMessage.includes('timeout')) {
+      progressCallback?.({ stage: 'fallback', percent: 100, message: 'Using fallback processing due to timeout' });
       
       try {
         // Simple fallback processing without advanced features
@@ -160,9 +169,11 @@ export async function processArrayBuffer(
 
   const processingPromise = async (): Promise<ActionResult<string[]>> => {
     try {
+      progressCallback?.({ stage: 'initialization', percent: 5, message: 'Loading PDF.js library' });
       
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
+      progressCallback?.({ stage: 'parsing', percent: 10, message: 'Parsing PDF document' });
       const pdfDoc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
       
       // Memory-aware processing limits for Edge Runtime
@@ -171,6 +182,11 @@ export async function processArrayBuffer(
       
       if (pdfDoc.numPages > MAX_PAGES_EDGE_RUNTIME) {
         console.warn(`PDF has ${pdfDoc.numPages} pages, processing first ${MAX_PAGES_EDGE_RUNTIME} for Edge Runtime compatibility`);
+        progressCallback?.({ 
+          stage: 'parsing', 
+          percent: 15, 
+          message: `Large PDF detected: processing first ${MAX_PAGES_EDGE_RUNTIME} of ${pdfDoc.numPages} pages` 
+        });
       }
       
       let rawText = '';
@@ -189,19 +205,28 @@ export async function processArrayBuffer(
         
         // Yield control after each batch to prevent event loop blocking
         await new Promise(resolve => setTimeout(resolve, 0));
+        
+        const progress = 15 + (batchEnd / actualPages) * 40;
+        progressCallback?.({ 
+          stage: 'extraction', 
+          percent: Math.round(progress), 
+          message: `Extracted text from ${batchEnd}/${actualPages} pages` 
+        });
       }
 
       if (!rawText) {
         return { success: false, error: 'Could not extract any text from the PDF.' };
       }
 
+      progressCallback?.({ stage: 'ocr_correction', percent: 60, message: 'Applying OCR error correction' });
       
       // Yield control before OCR processing
       await new Promise(resolve => setTimeout(resolve, 0));
       
       // Apply deterministic OCR error correction with timeout protection
-      const cleanedText = await processOcrWithTimeout(rawText, timeoutMs - 15000);
+      const cleanedText = await processOcrWithTimeout(rawText, timeoutMs - 15000, progressCallback);
 
+      progressCallback?.({ stage: 'chunking', percent: 80, message: 'Creating text chunks' });
       
       // Yield control before chunking
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -219,9 +244,16 @@ export async function processArrayBuffer(
         // Yield control every CHUNK_BATCH_SIZE chunks
         if (chunks.length % CHUNK_BATCH_SIZE === 0) {
           await new Promise(resolve => setTimeout(resolve, 0));
+          const progress = 80 + (chunks.length / Math.ceil(words.length / (chunkSize - chunkOverlap))) * 20;
+          progressCallback?.({ 
+            stage: 'chunking', 
+            percent: Math.round(progress), 
+            message: `Created ${chunks.length} chunks` 
+          });
         }
       }
       
+      progressCallback?.({ stage: 'complete', percent: 100, message: `Processing complete: ${chunks.length} chunks from ${actualPages} pages` });
       return { success: true, data: chunks };
 
     } catch (processingError) {
@@ -240,6 +272,7 @@ export async function processArrayBuffer(
     
     // If timeout, provide graceful fallback with basic processing
     if (errorMessage.includes('timeout')) {
+      progressCallback?.({ stage: 'fallback', percent: 100, message: 'Using fallback processing due to timeout' });
       
       try {
         // Simple fallback: attempt basic PDF text extraction without OCR correction
