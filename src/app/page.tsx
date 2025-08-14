@@ -58,8 +58,13 @@ export default function Home() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 disabled={isLoading}
+                data-testid="search-input"
               />
-              <Button onClick={handleSearch} disabled={isLoading}>
+              <Button 
+                onClick={handleSearch} 
+                disabled={isLoading}
+                data-testid="search-button"
+              >
                 {isLoading ? 'Searching...' : 'Search'}
               </Button>
             </div>
@@ -70,7 +75,9 @@ export default function Home() {
         </Card>
 
         {documents.length > 0 && (
-          <DocumentList documents={documents} />
+          <div data-testid="search-results">
+            <DocumentList documents={documents} />
+          </div>
         )}
 
         <ChatInterface />

@@ -111,7 +111,10 @@ export function ChatInterface() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="h-96 overflow-y-auto p-4 border rounded-md bg-gray-50 dark:bg-gray-900">
+          <div 
+            className="h-96 overflow-y-auto p-4 border rounded-md bg-gray-50 dark:bg-gray-900"
+            data-testid="chat-messages"
+          >
             {messages.map(message => (
               <div key={message.id} className="whitespace-pre-wrap mb-4">
                 <strong className="font-semibold">
@@ -138,8 +141,13 @@ export function ChatInterface() {
               placeholder="Ask a question about the ingested documents..."
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
+              data-testid="chat-input"
             />
-            <Button type="submit" disabled={isLoading || !input.trim()}>
+            <Button 
+              type="submit" 
+              disabled={isLoading || !input.trim()}
+              data-testid="chat-send"
+            >
               {isLoading ? 'Thinking...' : 'Send'}
             </Button>
           </form>
