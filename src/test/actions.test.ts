@@ -378,7 +378,7 @@ describe('RAG Pipeline Actions', () => {
       const result = await getSourcedAnswer('')
       
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Question cannot be empty.')
+      expect(result.error).toBe('Failed to get sourced answer: Question cannot be empty.')
     })
 
     it('should handle no relevant documents found', async () => {
