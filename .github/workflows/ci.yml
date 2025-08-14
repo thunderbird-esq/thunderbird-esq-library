@@ -173,6 +173,147 @@ jobs:
         env:
           CI: true
 
+      - name: Verify Test Execution
+        run: |
+          if jq '.suites | length == 0' test-results.json; then
+            echo "::error::CRITICAL FAILURE: No tests were found or executed. The test configuration is broken. Failing the build."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Install validation dependencies
+        run: sudo apt-get update && sudo apt-get install -y bc jq
+
+      - name: Validate test execution count
+        run: |
+          # Extract test counts from Playwright JSON output
+          if [ ! -f "test-results.json" ]; then
+            echo "❌ CRITICAL FAILURE: test-results.json not found"
+            echo "This indicates Playwright tests did not run or complete properly."
+            exit 1
+          fi
+          
+          TOTAL_TESTS=$(jq '.stats.expected + .stats.skipped + .stats.unexpected + .stats.flaky' test-results.json)
+          EXECUTED_TESTS=$(jq '.stats.expected + .stats.unexpected + .stats.flaky' test-results.json)
+          SKIPPED_TESTS=$(jq '.stats.skipped' test-results.json)
+          FAILED_TESTS=$(jq '.stats.unexpected' test-results.json)
+          
+          echo "📊 TEST EXECUTION SUMMARY:"
+          echo "Total tests discovered: $TOTAL_TESTS"
+          echo "Tests executed: $EXECUTED_TESTS" 
+          echo "Tests skipped: $SKIPPED_TESTS"
+          echo "Tests failed: $FAILED_TESTS"
+          
+          # RUTHLESS GATEKEEPER: Ensure minimum tests execute
+          MINIMUM_EXPECTED_TESTS=20
+          if [ "$TOTAL_TESTS" -lt "$MINIMUM_EXPECTED_TESTS" ]; then
+            echo "❌ CRITICAL FAILURE: Only $TOTAL_TESTS tests discovered, expected at least $MINIMUM_EXPECTED_TESTS"
+            echo "This suggests test files are missing or not being loaded properly."
+            exit 1
+          fi
+          
+          # RUTHLESS GATEKEEPER: Ensure tests actually execute (not just skip)
+          MINIMUM_EXECUTION_RATE=50 # At least 50% of tests should execute
+          if [ "$TOTAL_TESTS" -eq "0" ]; then
+            EXECUTION_PERCENTAGE=0
+          else
+            EXECUTION_PERCENTAGE=$(echo "scale=0; ($EXECUTED_TESTS * 100) / $TOTAL_TESTS" | bc -l)
+          fi
+          
+          if [ "$EXECUTION_PERCENTAGE" -lt "$MINIMUM_EXECUTION_RATE" ]; then
+            echo "❌ CRITICAL FAILURE: Only $EXECUTION_PERCENTAGE% of tests executed (threshold: $MINIMUM_EXECUTION_RATE%)"
+            echo "This indicates tests are being skipped due to missing dependencies or UI components."
+            echo "DIAGNOSIS: The application may not be properly serving the expected interface."
+            exit 1
+          fi
+          
+          # RUTHLESS GATEKEEPER: Zero tolerance for test failures
+          if [ "$FAILED_TESTS" -gt "0" ]; then
+            echo "❌ CRITICAL FAILURE: $FAILED_TESTS test(s) failed"
+            echo "No code reaches production with failing tests."
+            exit 1
+          fi
+          
+          echo "✅ TEST GATEKEEPER PASSED: $EXECUTED_TESTS/$TOTAL_TESTS tests executed successfully ($EXECUTION_PERCENTAGE% execution rate)"
+
+      - name: Verify test execution artifacts and evidence
+        run: |
+          echo "🔍 VERIFYING TEST EXECUTION EVIDENCE:"
+          
+          # Verify HTML report was generated
+          if [ -d "playwright-report" ]; then
+            HTML_REPORT_SIZE=$(du -sh playwright-report | cut -f1)
+            echo "✅ HTML report generated: $HTML_REPORT_SIZE"
+          else
+            echo "⚠️ HTML report missing - tests may not have run properly"
+          fi
+          
+          # Verify test results directory exists and has content
+          if [ -d "test-results" ]; then
+            RESULTS_COUNT=$(find test-results -name "*.png" -o -name "*.webm" -o -name "*.zip" | wc -l)
+            echo "✅ Test artifacts found: $RESULTS_COUNT files"
+            
+            # List screenshot evidence (indicates real browser interaction)
+            SCREENSHOT_COUNT=$(find test-results -name "*.png" | wc -l)
+            if [ "$SCREENSHOT_COUNT" -gt "0" ]; then
+              echo "✅ Screenshot evidence: $SCREENSHOT_COUNT files (proves browser automation)"
+            fi
+          else
+            echo "⚠️ Test results directory missing"
+          fi
+          
+          # Verify specific test suite execution
+          INGESTION_TESTS=$(jq -r '.suites[] | select(.title == "ingestion-pipeline.spec.ts") | .suites[].specs[].tests[].status' test-results.json | wc -l)
+          INGESTION_EXECUTED=$(jq -r '.suites[] | select(.title == "ingestion-pipeline.spec.ts") | .suites[].specs[].tests[] | select(.status != "skipped") | .status' test-results.json | wc -l)
+          
+          echo "📋 INGESTION PIPELINE TEST VERIFICATION:"
+          echo "  Total ingestion tests: $INGESTION_TESTS"
+          echo "  Executed ingestion tests: $INGESTION_EXECUTED"
+          
+          if [ "$INGESTION_EXECUTED" -eq "0" ]; then
+            echo "❌ CRITICAL: No ingestion pipeline tests executed!"
+            echo "This indicates the core functionality tests are not running."
+            echo "Root cause likely: Missing UI components or server configuration issues."
+            exit 1
+          fi
+          
+          echo "✅ EXECUTION VERIFICATION COMPLETE"
+
+      - name: Generate test execution summary
+        if: always()
+        run: |
+          echo "# 🧪 TEST EXECUTION REPORT" > test-execution-summary.md
+          echo "" >> test-execution-summary.md
+          echo "**Generated:** $(date)" >> test-execution-summary.md
+          echo "**Branch:** ${{ github.ref_name }}" >> test-execution-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> test-execution-summary.md
+          echo "" >> test-execution-summary.md
+          
+          # Extract and format test results
+          TOTAL=$(jq '.stats.expected + .stats.skipped + .stats.unexpected + .stats.flaky' test-results.json)
+          EXECUTED=$(jq '.stats.expected + .stats.unexpected + .stats.flaky' test-results.json)
+          SKIPPED=$(jq '.stats.skipped' test-results.json)
+          FAILED=$(jq '.stats.unexpected' test-results.json)
+          
+          echo "## Test Statistics" >> test-execution-summary.md
+          echo "- **Total Tests:** $TOTAL" >> test-execution-summary.md
+          echo "- **Executed:** $EXECUTED" >> test-execution-summary.md  
+          echo "- **Skipped:** $SKIPPED" >> test-execution-summary.md
+          echo "- **Failed:** $FAILED" >> test-execution-summary.md
+          echo "" >> test-execution-summary.md
+          
+          # Test breakdown by suite
+          echo "## Test Suite Breakdown" >> test-execution-summary.md
+          jq -r '.suites[] | "### " + .title + "\n" + (.suites[]?.specs[]? // .specs[] | "- " + .title + " (" + (.tests[0].status // "unknown") + ")")' test-results.json >> test-execution-summary.md
+          
+          echo "" >> test-execution-summary.md
+          echo "## Quality Gate Status" >> test-execution-summary.md
+          if [ "$FAILED" -eq "0" ] && [ "$EXECUTED" -gt "0" ]; then
+            echo "✅ **PASSED** - All executed tests successful" >> test-execution-summary.md
+          else
+            echo "❌ **FAILED** - Issues detected" >> test-execution-summary.md
+          fi
+
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
@@ -188,6 +329,14 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 7
+
+      - name: Upload test execution summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-execution-summary
+          path: test-execution-summary.md
+          retention-days: 30
 
   # Deploy to Vercel (Production)
   deploy-production:

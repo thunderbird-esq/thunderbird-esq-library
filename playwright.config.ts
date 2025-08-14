@@ -9,11 +9,10 @@ export default defineConfig({
   // Test directory for E2E tests
   testDir: './tests/e2e',
   
-  // Only run foundation tests by default for immediate value
+  // Run all E2E tests - core pipeline test is non-negotiable
   testMatch: [
     '**/tests/e2e/application-foundation.spec.ts',
     '**/tests/e2e/playwright-setup.spec.ts',
-    // Uncomment when UI components are implemented:
     '**/tests/e2e/ingestion-pipeline.spec.ts'
   ],
   
