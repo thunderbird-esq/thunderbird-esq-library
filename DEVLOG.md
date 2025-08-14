@@ -2900,3 +2900,268 @@ Files Modified:
 - /src/app/api/chat/route.ts (complete rewrite for v5 compatibility)
 - /src/components/research/ChatInterface.tsx (import path update)
 - package.json (added @ai-sdk/react dependency)
+
+---
+
+## **MULTI-AGENT INGESTION SYSTEM - IMPLEMENTATION PLAN & PROGRESS**
+### **Date**: August 14, 2025
+### **Mission**: Design and implement sophisticated multi-agent system for PDF-to-Markdown conversion
+
+### **EXECUTIVE SUMMARY**
+
+This implementation establishes a sophisticated multi-agent system for converting uploaded files into high-fidelity Markdown representations. The architecture leverages parallel processing across specialized conversion agents, intelligent synthesis through heuristic analysis, and seamless database integration.
+
+**Core Value Proposition**: Maximize conversion accuracy by running multiple specialized libraries in parallel and intelligently selecting the best output through empirical analysis.
+
+### **ARCHITECTURE OVERVIEW**
+
+The system consists of collaborating agents, each with specialized roles:
+
+- **@ingestion-orchestrator**: Entry point that receives files and triggers parallel processing workflow
+- **@marker-agent**: Wraps Marker library for high-fidelity conversion of complex documents
+- **@pdf2md-agent**: Wraps pdf2md-js library, leveraging vision models for scanned/image-heavy PDFs
+- **@opendocsg-agent**: Wraps @opendocsg/pdf2md library for rapid conversion of standard, text-based PDFs
+- **@synthesis-agent**: Core system that receives Markdown outputs and uses heuristics to select optimal version
+- **@database-admin**: Final step that receives validated Markdown and writes to Supabase database
+
+---
+
+### **PHASE 1: AGENT SCAFFOLDING & ENVIRONMENT SETUP** ✅ **COMPLETED**
+
+#### **1.1 Project Structure Creation** ✅
+Created complete multi-agent system directory structure:
+
+```
+src/lib/agents/
+├── types/
+│   ├── agent-interfaces.ts     ✅ Core interfaces
+│   └── conversion-results.ts   ✅ Result schemas
+├── ingestion/                  ✅ Ready for orchestrator
+├── converters/
+│   ├── marker/                ✅ Marker agent space
+│   ├── pdf2md/                ✅ PDF2MD agent space  
+│   └── opendocsg/             ✅ OpenDocSG agent space
+├── synthesis/                 ✅ Synthesis agent space
+└── database/                  ✅ Database admin space
+
+docker/marker-service/
+├── Dockerfile                 ✅ Production ready
+├── app.py                     ✅ FastAPI service
+├── config.py                  ✅ Configuration
+├── docker-compose.yml         ✅ Container orchestration
+└── requirements.txt           ✅ Python dependencies
+
+tests/agents/                  ✅ Testing infrastructure ready
+```
+
+#### **1.2 Package Dependencies Installation** ✅
+Successfully installed all required libraries:
+
+**Core Conversion Libraries**:
+- ✅ `pdf2md-js@1.0.8` - AI-powered PDF conversion with vision models
+- ✅ `@opendocsg/pdf2md@0.2.1` - High-speed text-based PDF extraction
+
+**File Processing Utilities**:
+- ✅ `file-type@18.7.0` - MIME type detection for robust file validation
+- ✅ `mime-types@2.1.35` - Content type handling for multi-format support
+
+**Agent Communication & Async Processing**:
+- ✅ `p-limit@4.0.0` - Concurrency control for parallel agent execution
+- ✅ `p-retry@5.1.2` - Retry mechanisms for resilient processing
+
+**Heuristic Analysis Utilities**:
+- ✅ `string-similarity@4.0.4` - Text comparison for synthesis scoring
+- ✅ `markdown-table@3.0.4` - Table structure validation and analysis
+
+**Development Dependencies**:
+- ✅ `@types/mime-types@2.1.4` - TypeScript definitions for type safety
+
+#### **1.3 Marker Microservice Configuration** ✅
+Complete Docker microservice implementation:
+
+**FastAPI Service Features**:
+- ✅ PDF upload endpoint (`/convert`) with comprehensive error handling
+- ✅ Health check endpoint (`/health`) for monitoring
+- ✅ Temporary file management with automatic cleanup
+- ✅ Model caching on startup for performance optimization
+- ✅ Configurable timeout and processing limits
+
+**Docker Configuration**:
+- ✅ Multi-stage optimization with system dependencies
+- ✅ Tesseract OCR and Poppler utils for document processing
+- ✅ Resource management and health monitoring
+- ✅ Auto-restart capabilities for production resilience
+- ✅ Port mapping (8001:8000) and environment configuration
+
+#### **1.4 Type System Implementation** ✅
+Comprehensive TypeScript interfaces for agent communication:
+
+**Core Interfaces**:
+```typescript
+interface ConversionResult {
+  success: boolean;
+  sourceAgent: string;
+  markdownContent: string;
+  metadata: {
+    processingTimeMs: number;
+    wordCount: number;
+    pageCount?: number;
+    confidence?: number;
+    errors?: string[];
+    warnings?: string[];
+  };
+}
+
+interface SynthesisScore {
+  agent: string;
+  totalScore: number;
+  heuristics: {
+    textQuality: number;
+    structurePreservation: number;
+    tableIntegrity: number;
+    listFormatting: number;
+    headerHierarchy: number;
+    linkPreservation: number;
+  };
+}
+```
+
+#### **1.5 Quality Assurance Verification** ✅
+**Build Status**: ✅ ALL CHECKS PASSED
+- ✅ `npm run build` - Successful compilation
+- ✅ `npm run lint` - No code quality issues
+- ✅ `npx tsc --noEmit` - No TypeScript errors
+- ✅ `npm run db:health` - Database functionality preserved
+- ✅ Zero regressions - All existing functionality intact
+
+**Git Integration**: ✅ COMMITTED & PUSHED
+- Commit Hash: `03c4358`
+- Files Changed: 10 files, 2005 insertions, 43 deletions
+- Successfully pushed to GitHub main branch
+
+---
+
+### **PHASE 2: SPECIALIST AGENT IMPLEMENTATION** 🚧 **NEXT**
+
+#### **2.1 Shared Type Definitions** 📋 **PLANNED**
+- Complete ConversionResult interface implementation
+- FileInput and AgentConfig type definitions
+- Error handling and result schemas
+
+#### **2.2 Marker Agent Implementation** 📋 **PLANNED**
+**Features to Implement**:
+- HTTP client for Marker microservice communication
+- Retry logic with exponential backoff
+- File size validation (50MB limit)
+- Confidence scoring based on processing characteristics
+- Comprehensive error handling with specific failure modes
+
+#### **2.3 PDF2MD Agent Implementation** 📋 **PLANNED**
+**Features to Implement**:
+- Direct pdf2md-js library integration
+- Vision model enablement for scanned PDFs
+- OpenAI API key configuration for advanced processing
+- Timeout wrapper (90 seconds) with graceful fallbacks
+- Content validation and confidence calculation
+
+#### **2.4 OpenDocSG Agent Implementation** 📋 **PLANNED**
+**Features to Implement**:
+- @opendocsg/pdf2md library wrapper
+- High-speed processing for standard text-based PDFs
+- Content quality assessment heuristics
+- Warning generation for processing anomalies
+- Performance optimization for rapid conversion
+
+---
+
+### **PHASE 3: SYNTHESIS AGENT - HEURISTIC LOGIC** 📋 **PLANNED**
+
+#### **3.1 Core Synthesis Engine** 📋 **PLANNED**
+**Heuristic Implementation**:
+1. **Text Quality Score** - Sentence structure, punctuation, readability
+2. **Structure Preservation Score** - Document hierarchy, paragraphs, sections
+3. **Table Integrity Score** - Tabular data preservation and formatting
+4. **List Formatting Score** - Numbered and bulleted list accuracy
+5. **Header Hierarchy Score** - Logical header structure and nesting
+6. **Link Preservation Score** - URL, email, and markdown link retention
+
+#### **3.2 LLM Coherence Check** 📋 **PLANNED**
+- Advanced conflict resolution when heuristic scores are close (within 15%)
+- Integration with existing `askModel` server action
+- Confidence scoring and reasoning documentation
+- Fallback to heuristic winner if LLM check fails
+
+---
+
+### **PHASE 4: ORCHESTRATION & DATABASE INTEGRATION** 📋 **PLANNED**
+
+#### **4.1 Ingestion Orchestrator** 📋 **PLANNED**
+- Parallel agent execution with Promise.all
+- Concurrency limiting (3 agents simultaneously)
+- Retry mechanisms with p-retry integration
+- Health checking across all agents
+- Processing statistics and performance metrics
+
+#### **4.2 Database Admin Implementation** 📋 **PLANNED**
+- Multi-agent document metadata storage
+- Enhanced chunking strategy for synthesis results
+- Processing statistics and agent usage tracking
+- Database schema migration for multi-agent support
+
+#### **4.3 Server Actions Integration** 📋 **PLANNED**
+- New `ingestFileMultiAgent` server action
+- Health status monitoring endpoints
+- Statistics retrieval for performance analysis
+- UI integration with existing document ingestion flow
+
+---
+
+### **IMPLEMENTATION TIMELINE**
+
+**Phase 1 Setup**: ✅ **COMPLETED** (3 days)
+- ✅ Directory structure, package installation, Marker Docker setup
+- ✅ Basic agent scaffolding and type definitions
+- ✅ Quality assurance and compatibility verification
+
+**Phase 2 Agents**: 📋 **NEXT** (3-4 days estimated)
+- Marker, PDF2MD, and OpenDocSG agent implementations
+- Comprehensive error handling and retry logic
+- Agent testing with varied document types
+
+**Phase 3 Synthesis**: 📋 **PLANNED** (4-5 days estimated)
+- Core heuristic implementation (6 heuristics)
+- LLM coherence check integration
+- Synthesis testing and optimization
+
+**Phase 4 Integration**: 📋 **PLANNED** (3-4 days estimated)
+- Orchestrator and database schema implementation
+- Server actions and UI integration
+- End-to-end testing and performance optimization
+
+**Total Estimated Time**: 13-16 days (Phase 1 complete, 10-13 days remaining)
+
+---
+
+### **CURRENT STATUS & NEXT STEPS**
+
+**✅ ACCOMPLISHED**:
+- Complete multi-agent infrastructure established
+- All conversion libraries installed and verified
+- Production-ready Marker microservice configured
+- Type system implemented for agent communication
+- Zero regressions on existing functionality
+- Successfully committed and pushed to GitHub
+
+**🎯 IMMEDIATE NEXT ACTIONS**:
+1. Begin Phase 2 implementation with Marker Agent
+2. Implement PDF2MD Agent with vision model integration
+3. Create OpenDocSG Agent for rapid text conversion
+4. Develop comprehensive testing suite for all agents
+
+**🔧 TECHNICAL DEBT ADDRESSED**:
+- Established robust error handling patterns
+- Implemented proper TypeScript type safety
+- Created production-ready Docker configuration
+- Ensured backward compatibility with existing system
+
+This multi-agent system will dramatically improve PDF-to-Markdown conversion accuracy through intelligent parallel processing and empirical synthesis, providing the Thunderbird-ESQ project with enterprise-grade document ingestion capabilities.
