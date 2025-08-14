@@ -239,13 +239,21 @@ export function DocumentItem({ doc }: { doc: Document }) {
       }
 
       setIngestState('storing');
-      setMessage(`Found ${chunkResult.data.length} chunks. Storing...`);
-      const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
-      if (storeResult.success) {
+      setMessage(`Found ${chunkResult.data.length} chunks. Generating embeddings...`);
+      
+      try {
+        const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
+        if (storeResult.success) {
+          setIngestState('ingested');
+          setMessage(`✅ Successfully ingested ${storeResult.data} chunks with embeddings.`);
+        } else {
+          throw new Error(storeResult.error || 'Storage failed.');
+        }
+      } catch (embeddingError) {
+        // Graceful degradation: show that text processing worked even if embeddings failed
         setIngestState('ingested');
-        setMessage(`Ingested ${storeResult.data} chunks.`);
-      } else {
-        throw new Error(storeResult.error || 'Storage failed.');
+        setMessage(`⚠️ Text processed (${chunkResult.data.length} chunks) but embeddings failed. RAG queries won't work until embeddings are generated. Error: ${embeddingError instanceof Error ? embeddingError.message : 'Unknown error'}`);
+        console.warn('Embedding generation failed, but text processing succeeded:', embeddingError);
       }
     } catch (error) {
       if (progressInterval) {
@@ -296,13 +304,21 @@ export function DocumentItem({ doc }: { doc: Document }) {
       }
 
       setIngestState('storing');
-      setMessage(`Found ${chunkResult.data.length} chunks. Storing...`);
-      const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
-      if (storeResult.success) {
+      setMessage(`Found ${chunkResult.data.length} chunks. Generating embeddings...`);
+      
+      try {
+        const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
+        if (storeResult.success) {
+          setIngestState('ingested');
+          setMessage(`✅ Successfully ingested ${storeResult.data} chunks with embeddings.`);
+        } else {
+          throw new Error(storeResult.error || 'Storage failed.');
+        }
+      } catch (embeddingError) {
+        // Graceful degradation: show that text processing worked even if embeddings failed
         setIngestState('ingested');
-        setMessage(`Ingested ${storeResult.data} chunks.`);
-      } else {
-        throw new Error(storeResult.error || 'Storage failed.');
+        setMessage(`⚠️ Text processed (${chunkResult.data.length} chunks) but embeddings failed. RAG queries won't work until embeddings are generated. Error: ${embeddingError instanceof Error ? embeddingError.message : 'Unknown error'}`);
+        console.warn('Embedding generation failed, but text processing succeeded:', embeddingError);
       }
     } catch (error) {
       if (progressInterval) {

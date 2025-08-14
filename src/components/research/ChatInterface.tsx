@@ -148,7 +148,7 @@ export function ChatInterface() {
               disabled={isLoading || !input.trim()}
               data-testid="chat-send"
             >
-              {isLoading ? 'Thinking...' : 'Send'}
+              {isLoading ? 'Thinking...' : 'Ask AI'}
             </Button>
           </form>
         </div>
