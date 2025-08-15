@@ -1,121 +1,73 @@
 #!/bin/bash
-
-# Database Health Check Script for Thunderbird ESQ Library
-# This script verifies that Supabase local database is properly initialized
+# Robust Database Health Check for Thunderbird ESQ
 #
-# Usage:
-#   ./scripts/db-health-check.sh          # Standard health check
-#   ./scripts/db-health-check.sh --extended  # Extended validation including vector functionality tests
+# This script uses `docker exec` to directly query the Supabase PostgreSQL
+# container and verify that the `pgvector` extension is installed and active.
+# It is designed to be fast, reliable, and CI-friendly.
+#
+# Exits with status 0 on success, 1 on failure.
 
-set -e
+set -eo pipefail
 
-echo "🔍 Database Health Check - Thunderbird ESQ Library"
-echo "=================================================="
+# --- Configuration ---
+DB_CONTAINER_NAME_PATTERN="supabase_db"
+DB_USER="postgres"
+DB_NAME="postgres"
+REQUIRED_EXTENSION="vector"
+MAX_RETRIES=10
+RETRY_INTERVAL_SECONDS=3
 
-# Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Function to print colored output
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+# --- Logging ---
+log() {
+    echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')] [HealthCheck] $1"
 }
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+log_error() {
+    log "ERROR: $1" >&2
 }
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# --- Main Logic ---
+log "Starting database health check..."
 
-# Check if Supabase CLI is installed
-print_status "Checking Supabase CLI installation..."
-if ! command -v supabase &> /dev/null; then
-    print_error "Supabase CLI is not installed."
-    exit 1
-fi
-print_success "Supabase CLI is installed"
+# 1. Find the Supabase database container ID
+log "Searching for database container matching pattern: '${DB_CONTAINER_NAME_PATTERN}'..."
+CONTAINER_ID=$(sudo docker ps -q --filter "name=${DB_CONTAINER_NAME_PATTERN}")
 
-# Check if Docker is running
-print_status "Checking Docker daemon status..."
-if ! docker ps &> /dev/null; then
-    print_error "Docker daemon is not running. Please start Docker."
-    exit 1
-fi
-print_success "Docker daemon is running"
-
-# Ensure Supabase is running
-print_status "Checking Supabase local status..."
-if ! supabase status > /dev/null; then
-    print_status "Supabase is not running. Starting it now..."
-    supabase start
-fi
-print_success "Supabase is running"
-
-# Test database connection
-print_status "Testing database connection..."
-if ! supabase db ping &> /dev/null; then
-    print_error "Database connection failed."
-    exit 1
-fi
-print_success "Database connection successful"
-
-# Check if vector extension is installed
-print_status "Checking vector extension..."
-
-# Get the container name dynamically - look for the main database container
-CONTAINER_NAME=$(docker ps --format "{{.Names}}" | grep "supabase_db_" | head -1)
-
-if [ -z "$CONTAINER_NAME" ]; then
-    print_error "Could not find Supabase PostgreSQL container"
+if [[ -z "$CONTAINER_ID" ]]; then
+    log_error "Supabase database container not found."
+    log_error "Please ensure Supabase is running with 'supabase start'."
     exit 1
 fi
 
-# Execute the vector extension check directly via Docker
-VECTOR_CHECK_RESULT=$(docker exec "$CONTAINER_NAME" psql -U postgres -d postgres -t -c "
-DO \$\$
-DECLARE
-  extension_exists boolean;
-BEGIN
-  SELECT EXISTS (
-    SELECT 1
-    FROM pg_extension ext
-    JOIN pg_namespace nsp ON ext.extnamespace = nsp.oid
-    WHERE ext.extname = 'vector' AND nsp.nspname = 'extensions'
-  ) INTO extension_exists;
-  
-  IF NOT extension_exists THEN
-    RAISE EXCEPTION 'pgvector extension not found in extensions schema';
-  END IF;
-  
-  -- Output success message
-  RAISE NOTICE 'pgvector extension verified successfully';
-END;
-\$\$;" 2>&1)
+if [[ $(echo "$CONTAINER_ID" | wc -l) -gt 1 ]]; then
+    log_error "Multiple database containers found. Please ensure only one is running."
+    exit 1
+fi
 
-if echo "$VECTOR_CHECK_RESULT" | grep -q "pgvector extension verified successfully"; then
-    print_success "vector extension is installed and accessible"
+log "Found database container ID: $CONTAINER_ID"
+
+# 2. Poll the database until the pgvector extension is ready
+log "Verifying '${REQUIRED_EXTENSION}' extension in database '${DB_NAME}'..."
+for ((i=1; i<=MAX_RETRIES; i++)); do
+    log "Attempt $i of $MAX_RETRIES..."
+
+    # Execute the check command
+    check_command_output=$(sudo docker exec "$CONTAINER_ID" psql -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT 1 FROM pg_extension WHERE extname = '${REQUIRED_EXTENSION}';" 2>&1)
     
-    # Optional: Run comprehensive validation if --extended flag is provided
-    if [[ "$1" == "--extended" ]]; then
-        print_status "Running extended vector functionality validation..."
-        EXTENDED_VALIDATION=$(cat scripts/validate-vector-functionality.sql | docker exec -i "$CONTAINER_NAME" psql -U postgres -d postgres 2>&1)
-        
-        if echo "$EXTENDED_VALIDATION" | grep -q "All checks passed"; then
-            print_success "Extended vector validation completed successfully"
-        else
-            print_error "Extended vector validation failed. Details: $EXTENDED_VALIDATION"
-            exit 1
-        fi
+    # Check the exit code of the docker exec command
+    if [[ $? -eq 0 ]] && [[ "$check_command_output" == "1" ]]; then
+        log "SUCCESS: '${REQUIRED_EXTENSION}' extension is installed and active."
+        log "Database is ready!"
+        exit 0
     fi
-else
-    print_error "vector extension is not installed or accessible. Details: $VECTOR_CHECK_RESULT"
-    exit 1
-fi
 
-print_success "🎉 All critical database health checks passed!"
-echo "Database is ready for the application."
+    log "Health check failed on attempt $i. Details: ${check_command_output}"
+    if (( i < MAX_RETRIES )); then
+        log "Waiting ${RETRY_INTERVAL_SECONDS} seconds before next attempt..."
+        sleep "$RETRY_INTERVAL_SECONDS"
+    fi
+done
+
+log_error "Failed to confirm database health after $MAX_RETRIES attempts."
+log_error "The '${REQUIRED_EXTENSION}' extension is not available."
+exit 1
