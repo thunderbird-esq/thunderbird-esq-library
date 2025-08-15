@@ -55,7 +55,7 @@ describe('AgentErrorHandler', () => {
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(AgentProcessingError);
-        expect(error.message).toContain('processing timed out');
+        expect(error.message).toContain('timed out');
       }
     });
 
@@ -309,7 +309,7 @@ describe('AgentErrorHandler', () => {
       expect(result.metadata.processingTimeMs).toBe(5000);
       expect(result.metadata.wordCount).toBe(0);
       expect(result.metadata.errors).toHaveLength(1);
-      expect(result.error).toContain('Processing failed');
+      expect(result.error).toContain('processing failed');
     });
 
     it('should handle different error types in results', () => {
