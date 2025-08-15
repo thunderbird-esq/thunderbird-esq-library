@@ -9,13 +9,6 @@ export default defineConfig({
   // Test directory for E2E tests
   testDir: './tests/e2e',
   
-  // Run all E2E tests - core pipeline test is non-negotiable
-  testMatch: [
-    '**/tests/e2e/application-foundation.spec.ts',
-    '**/tests/e2e/playwright-setup.spec.ts',
-    '**/tests/e2e/ingestion-pipeline.spec.ts'
-  ],
-  
   // Global test timeout (60 seconds per test for complex operations)
   timeout: 60000,
   
@@ -122,9 +115,8 @@ export default defineConfig({
   
   // Removed: Redundant testMatch configuration - using the one above
   
-  // Global setup and teardown for database initialization
+  // Global setup for database initialization
   globalSetup: require.resolve('./tests/global-setup.ts'),
-  globalTeardown: require.resolve('./tests/global-teardown.ts'),
   
   // Additional configuration for test stability
   forbidOnly: !!process.env.CI, // Prevent .only in CI

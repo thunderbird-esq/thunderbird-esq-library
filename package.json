@@ -3,14 +3,14 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "npm run db:health && npm run start:dev-server",
+        "dev": "next dev",
         "start:dev-server": "next dev",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
         "test": "vitest",
         "test:e2e": "playwright test",
-        "db:health": "sh ./scripts/db-health-check.sh"
+        "db:health": "bash ./scripts/db-health-check.sh"
     },
     "dependencies": {
         "@huggingface/inference": "2.7.0",
