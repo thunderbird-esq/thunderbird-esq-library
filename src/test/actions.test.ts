@@ -289,14 +289,28 @@ describe('RAG Pipeline Actions', () => {
       expect(mockSupabase.insert).not.toHaveBeenCalled()
     })
 
-    it('should handle embedding generation errors', async () => {
-      vi.mocked(ai.embed).mockRejectedValue(new Error('Embedding service down'))
+    it('should handle embedding generation errors with graceful degradation', async () => {
+      vi.mocked(ai.embed).mockRejectedValue(new Error('Embedding service down'));
+
+      const chunks = ['chunk number one with text'];
+      const documentId = 'doc-123';
+      const title = 'Test Document';
+
+      const result = await generateEmbeddingsAndStore(chunks, documentId, title);
+
+      // The operation should now be considered a success, as the text is stored.
+      expect(result.success).toBe(true);
+      // It should report that 0 embeddings were successfully stored, but 1 total document.
+      expect(result.data).toBe(1);
+
+      // Verify that Supabase insert was still called
+      expect(mockSupabase.from).toHaveBeenCalledWith('documents');
       
-      const result = await generateEmbeddingsAndStore(['chunk number one with text'], 'doc-123', 'Test Document')
-      
-      expect(result.success).toBe(false)
-      expect(result.error).toBe('All embedding generations failed. Processed 1 chunks, 0 successful.')
-    })
+      // Verify that the document was inserted with a null embedding
+      const insertedData = mockSupabase.insert.mock.calls[0][0][0];
+      expect(insertedData.content).toBe('chunk number one with text');
+      expect(insertedData.embedding).toBeNull();
+    });
 
     it('should handle Supabase insert errors', async () => {
       mockSupabase.insert.mockResolvedValue({ 
