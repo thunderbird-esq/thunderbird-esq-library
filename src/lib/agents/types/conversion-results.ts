@@ -29,6 +29,7 @@ export interface SynthesisResult {
     confidenceLevel: 'high' | 'medium' | 'low';
     llmCoherenceUsed: boolean;
   };
+  processingMetrics?: ProcessingMetrics;
 }
 
 export interface IngestionStatus {

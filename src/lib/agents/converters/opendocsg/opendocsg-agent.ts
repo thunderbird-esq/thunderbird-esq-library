@@ -1,13 +1,11 @@
 import { ConversionResult, FileInput, AgentConfig } from '../../types/agent-interfaces';
 import pRetry from 'p-retry';
 // @ts-ignore - @opendocsg/pdf2md may not have perfect TypeScript definitions
-import { pdf2md } from '@opendocsg/pdf2md';
+import pdf2md from '@opendocsg/pdf2md';
 
 interface OpenDocSGOptions {
-  preserveFormatting?: boolean;
-  extractImages?: boolean;
-  maxTableWidth?: number;
-  enableOCR?: boolean;
+  enableDebugLogging?: boolean;
+  useCallbacks?: boolean;
 }
 
 export class OpenDocSGAgent {
@@ -22,10 +20,8 @@ export class OpenDocSGAgent {
     };
     
     this.options = {
-      preserveFormatting: options?.preserveFormatting ?? true,
-      extractImages: options?.extractImages ?? true,
-      maxTableWidth: options?.maxTableWidth ?? 120,
-      enableOCR: options?.enableOCR ?? false, // Disabled by default for speed
+      enableDebugLogging: options?.enableDebugLogging ?? false,
+      useCallbacks: options?.useCallbacks ?? true,
     };
   }
 
@@ -105,19 +101,39 @@ export class OpenDocSGAgent {
         // Convert ArrayBuffer to Buffer for @opendocsg/pdf2md
         const buffer = Buffer.from(fileInput.buffer);
         
-        // Configure OpenDocSG options
-        const conversionOptions: any = {
-          preserveFormatting: this.options.preserveFormatting,
-          extractImages: this.options.extractImages,
-          maxTableWidth: this.options.maxTableWidth,
-          enableOCR: this.options.enableOCR,
-          // OpenDocSG specific optimizations
-          fastMode: true, // Prioritize speed over detail
-          cleanOutput: true, // Remove processing artifacts
-        };
+        // Configure OpenDocSG callbacks for progress tracking (optional)
+        const callbacks = this.options.useCallbacks ? {
+          metadataParsed: (metadata: any) => {
+            if (this.options.enableDebugLogging) {
+              console.debug('OpenDocSG: Metadata parsed', metadata);
+            }
+          },
+          pageParsed: (pages: any[]) => {
+            if (this.options.enableDebugLogging) {
+              console.debug(`OpenDocSG: ${pages.length} pages parsed`);
+            }
+          },
+          fontParsed: (font: any) => {
+            if (this.options.enableDebugLogging) {
+              console.debug('OpenDocSG: Font parsed', font);
+            }
+          },
+          documentParsed: (document: any, pages: any[]) => {
+            if (this.options.enableDebugLogging) {
+              console.debug(`OpenDocSG: Document parsed with ${pages.length} pages`);
+            }
+          }
+        } : undefined;
 
-        // Perform the conversion
-        pdf2md(buffer, conversionOptions)
+        // Perform the conversion using the correct API
+        const conversionPromise = pdf2md(buffer, callbacks);
+        
+        // Ensure we have a valid promise before proceeding
+        if (!conversionPromise || typeof conversionPromise.then !== 'function') {
+          throw new Error('OpenDocSG library call failed - invalid return value');
+        }
+        
+        conversionPromise
           .then((markdown: string) => {
             clearTimeout(timeoutId);
             
@@ -140,6 +156,8 @@ export class OpenDocSGAgent {
               reject(new Error('PDF file is corrupted or invalid format'));
             } else if (error.message.includes('memory') || error.message.includes('heap')) {
               reject(new Error('File too large for OpenDocSG processing - try reducing file size'));
+            } else if (error.message.includes('PDF parsing')) {
+              reject(new Error('PDF structure is incompatible with OpenDocSG parser'));
             } else {
               reject(new Error(`OpenDocSG processing failed: ${error.message}`));
             }
@@ -157,27 +175,36 @@ export class OpenDocSGAgent {
     // OpenDocSG-specific post-processing for optimal output
     let processed = markdown;
 
-    // Clean up OpenDocSG-specific artifacts
-    processed = processed.replace(/\[OpenDocSG\]/g, ''); // Remove tool signatures
+    // Clean up excessive whitespace and normalize spacing
+    processed = processed.replace(/\t/g, '    '); // Convert tabs to spaces
+    processed = processed.replace(/[ \t]+$/gm, ''); // Remove trailing whitespace
     
-    // Fix table formatting issues common with OpenDocSG
-    processed = processed.replace(/\|\s*-+\s*\|/g, '|---|'); // Standardize table separators
-    processed = processed.replace(/\|\s{2,}/g, '| '); // Fix excessive spacing in tables
+    // Remove empty lines and limit consecutive newlines
+    processed = processed.replace(/^\s*\n/gm, ''); // Remove empty lines
+    processed = processed.replace(/\n{3,}/g, '\n\n'); // Max 2 consecutive newlines
     
-    // Optimize heading structures
-    processed = processed.replace(/^(#{1,6})\s*(.+?)\s*#+\s*$/gm, '$1 $2'); // Remove trailing hashes
+    // Fix paragraph spacing for better readability
+    processed = processed.replace(/([.!?])\n([A-Z])/g, '$1\n\n$2'); // Ensure paragraph breaks
     
     // Clean up list formatting
     processed = processed.replace(/^\s*[-*+]\s*$/gm, ''); // Remove empty list items
     processed = processed.replace(/^(\s*)[-*+](\s+)/gm, '$1- '); // Standardize list markers
     
-    // Fix paragraph spacing (OpenDocSG can be inconsistent)
-    processed = processed.replace(/\n{3,}/g, '\n\n'); // Max 2 consecutive newlines
-    processed = processed.replace(/([.!?])\n([A-Z])/g, '$1\n\n$2'); // Ensure paragraph breaks
+    // Fix heading formatting issues
+    processed = processed.replace(/^(#{1,6})\s*(.+?)\s*#+\s*$/gm, '$1 $2'); // Remove trailing hashes
+    processed = processed.replace(/^(#{1,6})\s*$/gm, ''); // Remove empty headers
     
-    // Remove page artifacts
-    processed = processed.replace(/^Page \d+.*$/gm, ''); // Remove page headers/footers
+    // Improve table formatting if tables are present
+    if (processed.includes('|')) {
+      processed = processed.replace(/\|\s{2,}/g, '| '); // Fix excessive spacing in tables
+      processed = processed.replace(/\s{2,}\|/g, ' |'); // Fix spacing before pipes
+      processed = processed.replace(/^\|\s*\|/gm, '|'); // Remove empty table cells at start
+    }
+    
+    // Remove common PDF artifacts
     processed = processed.replace(/^\d+\s*$/gm, ''); // Remove standalone page numbers
+    processed = processed.replace(/^Page \d+/gm, ''); // Remove page headers
+    processed = processed.replace(/^\s*\.\s*$/gm, ''); // Remove standalone periods
     
     // Fix broken links and references
     processed = processed.replace(/\[([^\]]+)\]\(\s*\)/g, '$1'); // Remove empty links
@@ -187,12 +214,12 @@ export class OpenDocSGAgent {
   }
 
   private calculateConfidence(markdown: string, fileInput: FileInput, processingTimeMs: number): number {
-    let confidence = 0.75; // Base confidence for OpenDocSG (fast, reliable for text-based PDFs)
+    let confidence = 0.70; // Base confidence for OpenDocSG (fast, reliable for text-based PDFs)
 
     // Performance bonus - OpenDocSG is optimized for speed
-    const expectedTimeMs = fileInput.sizeBytes / 5000; // ~0.2ms per KB (very fast baseline)
+    const expectedTimeMs = fileInput.sizeBytes / 1000; // ~1ms per KB (reasonable baseline for testing)
     if (processingTimeMs < expectedTimeMs * 2) {
-      confidence += 0.1; // Significant bonus for fast processing
+      confidence += 0.05; // Moderate bonus for fast processing
     }
 
     // Content quality assessment
@@ -204,16 +231,18 @@ export class OpenDocSGAgent {
       confidence += 0.05;
     }
 
-    if (hasTablesOrLists && this.options.preserveFormatting) {
+    if (hasTablesOrLists) {
       confidence += 0.05; // Bonus for structured content
     }
 
     // Adjust based on file size vs content ratio
     const contentRatio = wordCount / (fileInput.sizeBytes / 1024); // Words per KB
-    if (contentRatio > 5) { // Good text density
+    if (contentRatio > 10) { // Very good text density
+      confidence += 0.1;
+    } else if (contentRatio > 5) { // Good text density
       confidence += 0.05;
-    } else if (contentRatio < 1 && fileInput.sizeBytes > 100000) { // Poor text density in large file
-      confidence -= 0.1;
+    } else if (contentRatio < 0.5 && fileInput.sizeBytes > 50000) { // Poor text density in large file
+      confidence -= 0.15;
     }
 
     // Penalty for very short results
@@ -232,17 +261,19 @@ export class OpenDocSGAgent {
   private assessStructureQuality(markdown: string): boolean {
     // Check for good structural elements
     const hasHeaders = /^#{1,6}\s+.+$/m.test(markdown);
-    const hasProperParagraphs = markdown.split('\n\n').length >= 3;
+    const hasProperParagraphs = markdown.split('\n\n').length >= 2;
     const hasLists = /^[\s]*[-*+]\s+.+$/m.test(markdown) || /^\d+\.\s+.+$/m.test(markdown);
     
-    // Check for lack of artifacts
-    const hasMinimalArtifacts = !(
+    // Check for artifacts that indicate poor conversion
+    const hasSignificantArtifacts = (
       markdown.includes('���') || // Encoding issues
       markdown.includes('[object Object]') || // Conversion artifacts
-      /\s{10,}/.test(markdown) // Excessive whitespace
+      /\s{10,}/.test(markdown) || // Excessive whitespace
+      markdown.length < 20 // Very short content
     );
 
-    return (hasHeaders || hasLists) && hasProperParagraphs && hasMinimalArtifacts;
+    // Must have structure and minimal artifacts for good quality
+    return (hasHeaders || hasLists || hasProperParagraphs) && !hasSignificantArtifacts;
   }
 
   private hasTablesOrLists(markdown: string): boolean {
@@ -269,20 +300,19 @@ export class OpenDocSGAgent {
       warnings.push('Potential encoding issues detected. Some characters may not have been converted correctly.');
     }
 
-    // Table/formatting warnings
-    if (markdown.includes('|') && !this.options.preserveFormatting) {
-      warnings.push('Tables detected but formatting preservation is disabled. Enable preserveFormatting for better table conversion.');
+    // Structure warnings
+    if (markdown.includes('|') && markdown.split('|').length < 6) {
+      warnings.push('Tables detected but may not be well-formatted. OpenDocSG provides basic table extraction.');
     }
 
-    // OCR warnings
-    if (!this.options.enableOCR && fileInput.sizeBytes > 1000000 && markdown.length < 500) {
-      warnings.push('Large file with minimal text output. Consider enabling OCR for image-based PDFs.');
+    // Content density warnings
+    if (fileInput.sizeBytes > 1000000 && markdown.length < 500) {
+      warnings.push('Large file with minimal text output. File may be image-heavy or contain complex layouts.');
     }
 
-    // Image warnings
-    const imageCount = (markdown.match(/!\[.*?\]\(.*?\)/g) || []).length;
-    if (imageCount === 0 && !this.options.extractImages && markdown.includes('image')) {
-      warnings.push('Image references found but image extraction is disabled.');
+    // Processing efficiency warnings
+    if (processingTimeMs > 20000 && fileInput.sizeBytes < 500000) {
+      warnings.push('Unexpectedly slow processing for file size. Document may have complex structure.');
     }
 
     return warnings;
@@ -299,32 +329,29 @@ export class OpenDocSGAgent {
     switch (mode) {
       case 'fast':
         this.options = {
-          preserveFormatting: false,
-          extractImages: false,
-          maxTableWidth: 80,
-          enableOCR: false,
+          enableDebugLogging: false,
+          useCallbacks: false,
         };
-        this.config.timeoutMs = 30000; // 30 seconds
+        this.config.timeoutMs = 20000; // 20 seconds
+        this.config.retryAttempts = 1;
         break;
 
       case 'balanced':
         this.options = {
-          preserveFormatting: true,
-          extractImages: true,
-          maxTableWidth: 120,
-          enableOCR: false,
+          enableDebugLogging: false,
+          useCallbacks: true,
         };
         this.config.timeoutMs = 45000; // 45 seconds
+        this.config.retryAttempts = 2;
         break;
 
       case 'thorough':
         this.options = {
-          preserveFormatting: true,
-          extractImages: true,
-          maxTableWidth: 200,
-          enableOCR: true,
+          enableDebugLogging: true,
+          useCallbacks: true,
         };
         this.config.timeoutMs = 90000; // 90 seconds
+        this.config.retryAttempts = 3;
         break;
     }
   }

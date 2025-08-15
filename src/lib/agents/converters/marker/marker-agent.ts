@@ -139,11 +139,13 @@ export class MarkerAgent {
     } catch (error) {
       clearTimeout(timeoutId);
       
-      if (error.name === 'AbortError') {
+      // Type guard for AbortError
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
         throw new Error(`Marker processing timeout after ${this.config.timeoutMs}ms`);
       }
       
-      if (error.code === 'ECONNREFUSED') {
+      // Type guard for ECONNREFUSED error
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNREFUSED') {
         throw new Error(`Cannot connect to Marker service at ${this.baseUrl}. Ensure Docker container is running.`);
       }
       

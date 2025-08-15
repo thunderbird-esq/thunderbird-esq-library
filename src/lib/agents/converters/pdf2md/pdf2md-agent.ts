@@ -1,6 +1,29 @@
 import { ConversionResult, FileInput, AgentConfig } from '../../types/agent-interfaces';
 import pRetry from 'p-retry';
-import { pdf2md } from 'pdf2md-js';
+import { parsePdf } from 'pdf2md-js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+// Local interfaces matching pdf2md-js types (not exported by the library)
+interface PDF2MDParseOptions {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  openAiApicompatible?: boolean;
+  outputDir?: string;
+  prompt?: string;
+  textPrompt?: string;
+  verbose?: boolean;
+  scale?: number;
+  concurrency?: number;
+  onProgress?: (progress: { current: number; total: number; taskStatus: 'starting' | 'running' | 'finished' }) => void;
+}
+
+interface PDF2MDParseResult {
+  content: string;
+  mdFilePath: string;
+}
 
 interface PDF2MDOptions {
   enableVision?: boolean;
@@ -8,6 +31,12 @@ interface PDF2MDOptions {
   imageQuality?: 'low' | 'medium' | 'high';
   preserveImages?: boolean;
   timeout?: number;
+  model?: string;
+  baseUrl?: string;
+  outputDir?: string;
+  verbose?: boolean;
+  scale?: number;
+  concurrency?: number;
 }
 
 export class PDF2MDAgent {
@@ -27,6 +56,12 @@ export class PDF2MDAgent {
       imageQuality: options?.imageQuality ?? 'medium',
       preserveImages: options?.preserveImages ?? true,
       timeout: options?.timeout ?? this.config.timeoutMs,
+      model: options?.model ?? 'gpt-4-vision-preview',
+      baseUrl: options?.baseUrl,
+      outputDir: options?.outputDir,
+      verbose: options?.verbose ?? false,
+      scale: options?.scale ?? 2,
+      concurrency: options?.concurrency ?? 4,
     };
   }
 
@@ -97,63 +132,100 @@ export class PDF2MDAgent {
   }
 
   private async performConversion(fileInput: FileInput): Promise<string> {
-    return new Promise((resolve, reject) => {
+    let tempFilePath: string | null = null;
+
+    return new Promise(async (resolve, reject) => {
       const timeoutId = setTimeout(() => {
+        // Clean up temp file on timeout
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          try {
+            fs.unlinkSync(tempFilePath);
+          } catch (cleanupError) {
+            console.warn('Failed to clean up temp file on timeout:', cleanupError);
+          }
+        }
         reject(new Error(`PDF2MD processing timeout after ${this.config.timeoutMs}ms`));
       }, this.config.timeoutMs);
 
       try {
-        // Convert ArrayBuffer to Buffer for pdf2md-js
+        // Create a temporary file from the buffer
         const buffer = Buffer.from(fileInput.buffer);
-        
+        const tempDir = os.tmpdir();
+        const tempFileName = `pdf2md_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.pdf`;
+        tempFilePath = path.join(tempDir, tempFileName);
+
+        // Write buffer to temporary file
+        await fs.promises.writeFile(tempFilePath, buffer);
+
         // Configure pdf2md options based on agent settings
-        const pdf2mdOptions: any = {
-          imageQuality: this.options.imageQuality,
-          preserveImages: this.options.preserveImages,
+        const parseOptions: PDF2MDParseOptions = {
+          verbose: this.options.verbose,
+          scale: this.options.scale,
+          concurrency: this.options.concurrency,
         };
 
         // Enable vision processing if configured and API key is available
         if (this.options.enableVision && this.options.openaiApiKey) {
-          pdf2mdOptions.vision = {
-            enabled: true,
-            apiKey: this.options.openaiApiKey,
-            model: 'gpt-4-vision-preview', // Use vision-capable model
-          };
+          parseOptions.apiKey = this.options.openaiApiKey;
+          parseOptions.model = this.options.model;
+          if (this.options.baseUrl) {
+            parseOptions.baseUrl = this.options.baseUrl;
+          }
         }
 
-        // Perform the conversion
-        pdf2md(buffer, pdf2mdOptions)
-          .then((markdown: string) => {
-            clearTimeout(timeoutId);
-            
-            if (!markdown || markdown.trim().length === 0) {
-              reject(new Error('PDF2MD returned empty result'));
-              return;
-            }
+        // Set output directory if specified
+        if (this.options.outputDir) {
+          parseOptions.outputDir = this.options.outputDir;
+        }
 
-            // Clean up the markdown output
-            const cleanedMarkdown = this.postProcessMarkdown(markdown);
-            resolve(cleanedMarkdown);
-          })
-          .catch((error: Error) => {
-            clearTimeout(timeoutId);
-            
-            // Handle common pdf2md-js errors
-            if (error.message.includes('password')) {
-              reject(new Error('PDF is password protected and cannot be processed'));
-            } else if (error.message.includes('corrupt')) {
-              reject(new Error('PDF file appears to be corrupted'));
-            } else if (error.message.includes('vision') && error.message.includes('API')) {
-              reject(new Error('Vision processing failed: Invalid or missing OpenAI API key'));
-            } else {
-              reject(new Error(`PDF2MD processing failed: ${error.message}`));
-            }
-          });
+        // Perform the conversion using parsePdf
+        const result: PDF2MDParseResult = await parsePdf(tempFilePath, parseOptions);
+        
+        clearTimeout(timeoutId);
+        
+        // Clean up the temporary file
+        try {
+          if (fs.existsSync(tempFilePath)) {
+            await fs.promises.unlink(tempFilePath);
+          }
+        } catch (cleanupError) {
+          console.warn('Failed to clean up temp file:', cleanupError);
+        }
+
+        if (!result.content || result.content.trim().length === 0) {
+          reject(new Error('PDF2MD returned empty result'));
+          return;
+        }
+
+        // Clean up the markdown output
+        const cleanedMarkdown = this.postProcessMarkdown(result.content);
+        resolve(cleanedMarkdown);
 
       } catch (error) {
         clearTimeout(timeoutId);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error during PDF2MD setup';
-        reject(new Error(`PDF2MD initialization failed: ${errorMessage}`));
+        
+        // Clean up temp file on error
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          try {
+            await fs.promises.unlink(tempFilePath);
+          } catch (cleanupError) {
+            console.warn('Failed to clean up temp file on error:', cleanupError);
+          }
+        }
+        
+        // Handle common pdf2md-js errors
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('password')) {
+          reject(new Error('PDF is password protected and cannot be processed'));
+        } else if (errorMessage.includes('corrupt')) {
+          reject(new Error('PDF file appears to be corrupted'));
+        } else if (errorMessage.includes('API') && errorMessage.includes('key')) {
+          reject(new Error('Vision processing failed: Invalid or missing OpenAI API key'));
+        } else if (errorMessage.includes('ENOENT')) {
+          reject(new Error('PDF file could not be accessed - temporary file creation failed'));
+        } else {
+          reject(new Error(`PDF2MD processing failed: ${errorMessage}`));
+        }
       }
     });
   }
@@ -263,10 +335,23 @@ export class PDF2MDAgent {
   /**
    * Enable or disable vision processing
    */
-  setVisionProcessing(enabled: boolean, apiKey?: string): void {
+  setVisionProcessing(enabled: boolean, apiKey?: string, model?: string): void {
     this.options.enableVision = enabled;
     if (apiKey) {
       this.options.openaiApiKey = apiKey;
+    }
+    if (model) {
+      this.options.model = model;
+    }
+  }
+
+  /**
+   * Set the OpenAI model and base URL for vision processing
+   */
+  setModelConfiguration(model: string, baseUrl?: string): void {
+    this.options.model = model;
+    if (baseUrl) {
+      this.options.baseUrl = baseUrl;
     }
   }
 

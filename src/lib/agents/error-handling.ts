@@ -313,3 +313,34 @@ export class AgentErrorHandler {
     }
   }
 }
+
+/**
+ * Standalone utility function for handling agent errors
+ * Wraps the AgentErrorHandler.createErrorResult method for convenient usage
+ */
+export function handleAgentError(
+  agent: string,
+  error: Error,
+  processingTimeMs: number,
+  context?: Partial<ErrorContext>
+): ConversionResult {
+  return AgentErrorHandler.createErrorResult(agent, error, processingTimeMs, context);
+}
+
+/**
+ * Determines if an error is recoverable and worth retrying
+ * Uses the same analysis logic as AgentErrorHandler.analyzeError
+ */
+export function isRecoverableError(error: Error, context?: Partial<ErrorContext>): boolean {
+  const defaultContext: ErrorContext = {
+    agent: 'unknown',
+    operation: 'analysis',
+    timestamp: new Date(),
+    ...context
+  };
+
+  // Use the private analyzeError method by calling it through the class
+  // We need to access this via reflection since it's private
+  const errorAnalysis = (AgentErrorHandler as any).analyzeError(error, defaultContext);
+  return errorAnalysis.recoverable;
+}
