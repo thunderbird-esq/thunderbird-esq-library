@@ -562,16 +562,19 @@ export async function generateEmbeddingsAndStore(
       
       const embedding = await generateEmbeddingWithRetry(content, originalIndex);
       
+      documentsToInsert.push({
+        document_id: documentId,
+        title: title,
+        content: content,
+        embedding: embedding, // embedding can be null here
+      });
+
       if (embedding) {
-        documentsToInsert.push({
-          document_id: documentId,
-          title: title,
-          content: content,
-          embedding: embedding,
-        });
         successfulEmbeddings++;
       } else {
         failedEmbeddings++;
+        // Log that this chunk will be stored without an embedding
+        console.warn(`Chunk ${originalIndex} will be stored without an embedding due to repeated failures.`);
       }
     }
 
