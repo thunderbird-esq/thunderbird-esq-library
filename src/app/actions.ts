@@ -4,6 +4,31 @@
 import { ActionResult, InternetArchiveDocument, MatchedDocument } from './types';
 import * as ai from '@/lib/ai/huggingface';
 import { fixOcrErrorsAsync } from '@/lib/text-processing';
+import { processWithMultipleAgents, PipelineConfig } from '@/lib/agents/pipeline';
+import { FileInput, ConversionResult } from '@/lib/agents/types/agent-interfaces';
+import { SynthesisResult } from '@/lib/agents/types/conversion-results';
+
+/**
+ * Result interface for multi-agent processing that includes synthesis analysis
+ */
+export interface MultiAgentProcessingResult {
+  chunks: string[];
+  synthesisResult: SynthesisResult;
+  processingReport: {
+    totalAgents: number;
+    successfulAgents: number;
+    selectedAgent: string;
+    selectionReason: string;
+    confidenceLevel: string;
+    allAgentResults: Array<{
+      agent: string;
+      success: boolean;
+      processingTime: number;
+      wordCount: number;
+      errors?: string[];
+    }>;
+  };
+}
 
 
 /**
@@ -279,6 +304,154 @@ export async function processArrayBuffer(
 }
 
 /**
+ * Processes a PDF using multiple conversion agents for enhanced quality and reliability.
+ * This extends the standard PDF processing with multi-agent synthesis to select the best conversion.
+ * 
+ * Enhanced Features:
+ * - Parallel execution of multiple conversion agents (Marker, PDF2MD, OpenDocSG)
+ * - Intelligent synthesis to select the highest quality conversion
+ * - Comprehensive agent performance analysis and reporting
+ * - Configurable agent selection and retry behavior
+ * - Complete backward compatibility with single-agent processing
+ * 
+ * @param buffer An ArrayBuffer of the PDF file data
+ * @param config Optional configuration for agent selection and behavior
+ * @param timeoutMs Optional timeout in milliseconds (default: 60000ms for multi-agent)
+ * @returns An ActionResult with multi-agent processing results including synthesis analysis
+ */
+export async function processArrayBufferWithMultipleAgents(
+  buffer: ArrayBuffer,
+  config: Partial<PipelineConfig> = {},
+  timeoutMs: number = 60000
+): Promise<ActionResult<MultiAgentProcessingResult>> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`Multi-agent PDF processing timeout after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  const processingPromise = async (): Promise<ActionResult<MultiAgentProcessingResult>> => {
+    try {
+      // Create FileInput interface required by agents
+      const fileInput: FileInput = {
+        buffer,
+        originalName: 'document.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: buffer.byteLength
+      };
+
+      // Validate buffer size - enforce reasonable limits for multi-agent processing
+      const maxSizeMB = 50; // Conservative limit for parallel processing
+      const sizeMB = buffer.byteLength / (1024 * 1024);
+      
+      if (sizeMB > maxSizeMB) {
+        return { 
+          success: false, 
+          error: `File too large for multi-agent processing: ${sizeMB.toFixed(1)}MB exceeds limit of ${maxSizeMB}MB. Use single-agent processing for larger files.` 
+        };
+      }
+
+      console.log(`Starting multi-agent processing for PDF (${sizeMB.toFixed(1)}MB)...`);
+
+      // Execute multi-agent pipeline with timeout protection
+      const synthesisResult = await processWithMultipleAgents(fileInput, config);
+
+      if (!synthesisResult.selectedResult.success) {
+        const allErrors = synthesisResult.processingMetrics?.agentResults
+          .filter(result => !result.success)
+          .map(result => `${result.sourceAgent}: ${result.error}`)
+          .join('; ');
+        
+        return { 
+          success: false, 
+          error: `All conversion agents failed. Errors: ${allErrors || 'Unknown errors occurred'}` 
+        };
+      }
+
+      // Get the best conversion result
+      const bestConversion = synthesisResult.selectedResult;
+      const markdownContent = bestConversion.markdownContent;
+
+      if (!markdownContent || markdownContent.trim().length < 100) {
+        return { 
+          success: false, 
+          error: 'Multi-agent conversion produced insufficient content. All agents may have failed to extract meaningful text.' 
+        };
+      }
+
+      console.log(`Multi-agent conversion completed. Selected agent: ${bestConversion.sourceAgent} (${bestConversion.metadata.wordCount} words)`);
+
+      // Apply the same chunking logic as the original processArrayBuffer
+      await new Promise(resolve => setTimeout(resolve, 0)); // Yield control
+      
+      const chunkSize = 500;
+      const chunkOverlap = 50;
+      const words = markdownContent.split(/\s+/);
+      const chunks: string[] = [];
+      
+      // Process chunks in batches to yield control periodically
+      const CHUNK_BATCH_SIZE = 1000;
+      for (let i = 0; i < words.length; i += chunkSize - chunkOverlap) {
+        chunks.push(words.slice(i, i + chunkSize).join(' '));
+        
+        // Yield control every CHUNK_BATCH_SIZE chunks
+        if (chunks.length % CHUNK_BATCH_SIZE === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+
+      // Generate comprehensive processing report
+      const allResults = synthesisResult.processingMetrics?.agentResults || [];
+      const successfulAgents = allResults.filter(r => r.success).length;
+      
+      const processingReport = {
+        totalAgents: allResults.length,
+        successfulAgents,
+        selectedAgent: bestConversion.sourceAgent,
+        selectionReason: synthesisResult.synthesisData.selectionReason,
+        confidenceLevel: synthesisResult.synthesisData.confidenceLevel,
+        allAgentResults: allResults.map(result => ({
+          agent: result.sourceAgent,
+          success: result.success,
+          processingTime: result.metadata.processingTimeMs,
+          wordCount: result.metadata.wordCount,
+          errors: result.metadata.errors
+        }))
+      };
+
+      const multiAgentResult: MultiAgentProcessingResult = {
+        chunks,
+        synthesisResult,
+        processingReport
+      };
+      
+      return { success: true, data: multiAgentResult };
+
+    } catch (processingError) {
+      console.error('Error in multi-agent ArrayBuffer processing:', processingError);
+      const errorMessage = processingError instanceof Error ? processingError.message : 'Unknown multi-agent processing error.';
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  try {
+    // Race between processing and timeout
+    return await Promise.race([processingPromise(), timeoutPromise]);
+  } catch (error) {
+    console.error('Error in multi-agent ArrayBuffer processing:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown multi-agent processing error.';
+    
+    // Provide helpful fallback guidance
+    if (errorMessage.includes('timeout')) {
+      return { 
+        success: false, 
+        error: `Multi-agent processing timeout after ${timeoutMs}ms. Consider using single-agent processing for faster results or increase timeout for complex documents.` 
+      };
+    }
+    
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
  * Generates embeddings for text chunks and stores them in Supabase in batches.
  * Enhanced with production-level resilience features:
  * - Retry logic for failed API calls
@@ -482,6 +655,64 @@ export async function generateEmbeddingsAndStore(
       success: false, 
       error: `Embedding and storage process failed: ${errorMessage}` 
     };
+  }
+}
+
+/**
+ * Convenient wrapper that processes a PDF with multiple agents and stores the result.
+ * This combines multi-agent processing with embedding generation and storage in a single operation.
+ * 
+ * @param buffer An ArrayBuffer of the PDF file data
+ * @param documentId The identifier of the source document
+ * @param title The title of the source document
+ * @param config Optional configuration for agent selection and behavior
+ * @returns An ActionResult with the number of successful embeddings and processing report
+ */
+export async function processAndStoreWithMultipleAgents(
+  buffer: ArrayBuffer,
+  documentId: string,
+  title: string,
+  config: Partial<PipelineConfig> = {}
+): Promise<ActionResult<{
+  embeddingsStored: number;
+  processingReport: MultiAgentProcessingResult['processingReport'];
+}>> {
+  try {
+    // Step 1: Process with multiple agents
+    const multiAgentResult = await processArrayBufferWithMultipleAgents(buffer, config);
+    
+    if (!multiAgentResult.success || !multiAgentResult.data) {
+      return { 
+        success: false, 
+        error: `Multi-agent processing failed: ${multiAgentResult.error}` 
+      };
+    }
+
+    // Step 2: Generate embeddings and store
+    const { chunks, processingReport } = multiAgentResult.data;
+    const embeddingResult = await generateEmbeddingsAndStore(chunks, documentId, title);
+    
+    if (!embeddingResult.success || embeddingResult.data === undefined) {
+      return { 
+        success: false, 
+        error: `Embedding generation failed after successful multi-agent processing: ${embeddingResult.error}` 
+      };
+    }
+
+    console.log(`Multi-agent processing completed: ${embeddingResult.data} embeddings stored using ${processingReport.selectedAgent} agent`);
+
+    return {
+      success: true,
+      data: {
+        embeddingsStored: embeddingResult.data,
+        processingReport
+      }
+    };
+
+  } catch (error) {
+    console.error('Error in processAndStoreWithMultipleAgents:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error in multi-agent process and store.';
+    return { success: false, error: errorMessage };
   }
 }
 

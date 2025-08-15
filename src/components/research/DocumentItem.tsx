@@ -5,8 +5,12 @@ import { useState, useMemo } from 'react';
 import {
   generateEmbeddingsAndStore,
   processRawText,
-  processArrayBuffer
+  processArrayBuffer,
+  processArrayBufferWithMultipleAgents,
+  processAndStoreWithMultipleAgents,
+  MultiAgentProcessingResult
 } from '@/app/actions';
+import { PipelineConfig } from '@/lib/agents/pipeline';
 import { Button } from '@/components/ui/button';
 
 type Document = {
@@ -14,6 +18,21 @@ type Document = {
 };
 
 type IngestionState = 'idle' | 'downloading' | 'processing' | 'storing' | 'ingested' | 'failed';
+
+type ProcessingMode = 'single' | 'multi';
+
+type AgentConfig = {
+  marker: { enabled: boolean; description: string };
+  pdf2md: { enabled: boolean; description: string };
+  opendocsg: { enabled: boolean; description: string };
+};
+
+type MultiAgentState = {
+  mode: ProcessingMode;
+  agentConfig: AgentConfig;
+  synthesisResult?: MultiAgentProcessingResult['synthesisResult'];
+  processingReport?: MultiAgentProcessingResult['processingReport'];
+};
 
 type InternetArchiveFile = {
   format?: string;
@@ -200,6 +219,15 @@ export function DocumentItem({ doc }: { doc: Document }) {
   const [ingestState, setIngestState] = useState<IngestionState>('idle');
   const [message, setMessage] = useState<string>('');
   const [processingProgress, setProcessingProgress] = useState<number>(0);
+  const [multiAgentState, setMultiAgentState] = useState<MultiAgentState>({
+    mode: 'single',
+    agentConfig: {
+      marker: { enabled: true, description: 'Advanced PDF parsing with layout preservation' },
+      pdf2md: { enabled: true, description: 'Markdown conversion with structure analysis' },
+      opendocsg: { enabled: true, description: 'Specialized scientific document processing' }
+    }
+  });
+  const [showAgentConfig, setShowAgentConfig] = useState(false);
   
   const availableMethods = useMemo(() => {
     const formats = new Set(doc.format || []);
@@ -286,39 +314,103 @@ export function DocumentItem({ doc }: { doc: Document }) {
       const filename = await getFilename(doc.identifier, ['Abbyy GZ', 'PDF']);
       const buffer = await downloadFileWithRetry(doc.identifier, filename, 'binary');
 
-      setIngestState('processing');
-      setMessage('Processing PDF on server...');
-      setProcessingProgress(0);
-      
-      // Client-side progress simulation for better UX
-      progressInterval = setInterval(() => {
-        setProcessingProgress(prev => Math.min(prev + 5, 70));
-      }, 800);
-      
-      const chunkResult = await processArrayBuffer(buffer as ArrayBuffer, 30000);
-      clearInterval(progressInterval);
-      progressInterval = null;
-      setProcessingProgress(100);
-      if (!chunkResult.success || !chunkResult.data) {
-        throw new Error(chunkResult.error || 'Failed to process PDF on server.');
-      }
-
-      setIngestState('storing');
-      setMessage(`Found ${chunkResult.data.length} chunks. Generating embeddings...`);
-      
-      try {
-        const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
-        if (storeResult.success) {
-          setIngestState('ingested');
-          setMessage(`✅ Successfully ingested ${storeResult.data} chunks with embeddings.`);
-        } else {
-          throw new Error(storeResult.error || 'Storage failed.');
+      // Handle single-agent processing (existing behavior)
+      if (multiAgentState.mode === 'single') {
+        setIngestState('processing');
+        setMessage('Processing PDF on server...');
+        setProcessingProgress(0);
+        
+        // Client-side progress simulation for better UX
+        progressInterval = setInterval(() => {
+          setProcessingProgress(prev => Math.min(prev + 5, 70));
+        }, 800);
+        
+        const chunkResult = await processArrayBuffer(buffer as ArrayBuffer, 30000);
+        clearInterval(progressInterval);
+        progressInterval = null;
+        setProcessingProgress(100);
+        if (!chunkResult.success || !chunkResult.data) {
+          throw new Error(chunkResult.error || 'Failed to process PDF on server.');
         }
-      } catch (embeddingError) {
-        // Graceful degradation: show that text processing worked even if embeddings failed
+
+        setIngestState('storing');
+        setMessage(`Found ${chunkResult.data.length} chunks. Generating embeddings...`);
+        
+        try {
+          const storeResult = await generateEmbeddingsAndStore(chunkResult.data, doc.identifier, doc.title);
+          if (storeResult.success) {
+            setIngestState('ingested');
+            setMessage(`✅ Successfully ingested ${storeResult.data} chunks with embeddings.`);
+          } else {
+            throw new Error(storeResult.error || 'Storage failed.');
+          }
+        } catch (embeddingError) {
+          // Graceful degradation: show that text processing worked even if embeddings failed
+          setIngestState('ingested');
+          setMessage(`⚠️ Text processed (${chunkResult.data.length} chunks) but embeddings failed. RAG queries won't work until embeddings are generated. Error: ${embeddingError instanceof Error ? embeddingError.message : 'Unknown error'}`);
+          console.warn('Embedding generation failed, but text processing succeeded:', embeddingError);
+        }
+      } else {
+        // Handle multi-agent processing
+        setIngestState('processing');
+        setMessage('Initializing multi-agent processing...');
+        setProcessingProgress(0);
+        
+        // Build pipeline config from UI selections
+        const pipelineConfig: Partial<PipelineConfig> = {
+          enabledAgents: {
+            marker: multiAgentState.agentConfig.marker.enabled,
+            pdf2md: multiAgentState.agentConfig.pdf2md.enabled,
+            opendocsg: multiAgentState.agentConfig.opendocsg.enabled
+          }
+        };
+        
+        // Progress simulation for multi-agent processing
+        progressInterval = setInterval(() => {
+          setProcessingProgress(prev => {
+            if (prev < 30) {
+              setMessage('Running parallel agent processing...');
+              return prev + 3;
+            } else if (prev < 60) {
+              setMessage('Agents processing document...');
+              return prev + 2;
+            } else if (prev < 80) {
+              setMessage('Synthesizing results...');
+              return prev + 1;
+            } else {
+              setMessage('Finalizing processing...');
+              return Math.min(prev + 0.5, 95);
+            }
+          });
+        }, 1000);
+        
+        const multiAgentResult = await processAndStoreWithMultipleAgents(
+          buffer as ArrayBuffer,
+          doc.identifier,
+          doc.title,
+          pipelineConfig
+        );
+        
+        clearInterval(progressInterval);
+        progressInterval = null;
+        setProcessingProgress(100);
+        
+        if (!multiAgentResult.success || !multiAgentResult.data) {
+          throw new Error(multiAgentResult.error || 'Multi-agent processing failed.');
+        }
+        
+        // Store processing results for display
+        setMultiAgentState(prev => ({
+          ...prev,
+          processingReport: multiAgentResult.data!.processingReport
+        }));
+        
         setIngestState('ingested');
-        setMessage(`⚠️ Text processed (${chunkResult.data.length} chunks) but embeddings failed. RAG queries won't work until embeddings are generated. Error: ${embeddingError instanceof Error ? embeddingError.message : 'Unknown error'}`);
-        console.warn('Embedding generation failed, but text processing succeeded:', embeddingError);
+        const report = multiAgentResult.data.processingReport;
+        setMessage(
+          `✅ Multi-agent processing complete! ${multiAgentResult.data.embeddingsStored} chunks ingested. ` +
+          `Selected: ${report.selectedAgent} (${report.confidenceLevel} confidence)`
+        );
       }
     } catch (error) {
       if (progressInterval) {
@@ -342,6 +434,23 @@ export function DocumentItem({ doc }: { doc: Document }) {
   
   const isWorking = ['downloading', 'processing', 'storing'].includes(ingestState);
   const isDone = ingestState === 'ingested';
+  
+  const toggleAgent = (agentName: keyof AgentConfig) => {
+    setMultiAgentState(prev => ({
+      ...prev,
+      agentConfig: {
+        ...prev.agentConfig,
+        [agentName]: {
+          ...prev.agentConfig[agentName],
+          enabled: !prev.agentConfig[agentName].enabled
+        }
+      }
+    }));
+  };
+  
+  const getEnabledAgentsCount = () => {
+    return Object.values(multiAgentState.agentConfig).filter(agent => agent.enabled).length;
+  };
 
   return (
     <li className="p-3 border rounded-md flex justify-between items-start min-h-[88px] gap-4">
@@ -369,6 +478,41 @@ export function DocumentItem({ doc }: { doc: Document }) {
                 ></div>
               </div>
             )}
+            
+            {/* Multi-agent processing results */}
+            {isDone && multiAgentState.mode === 'multi' && multiAgentState.processingReport && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                <div className="font-semibold text-green-800 mb-1">Multi-Agent Results:</div>
+                <div className="space-y-1 text-green-700">
+                  <div>Selected Agent: <span className="font-medium">{multiAgentState.processingReport.selectedAgent}</span></div>
+                  <div>Confidence: <span className="font-medium">{multiAgentState.processingReport.confidenceLevel}</span></div>
+                  <div>Reason: {multiAgentState.processingReport.selectionReason}</div>
+                  <div className="text-xs text-green-600">
+                    {multiAgentState.processingReport.successfulAgents}/{multiAgentState.processingReport.totalAgents} agents succeeded
+                  </div>
+                  
+                  {/* Agent performance details */}
+                  {multiAgentState.processingReport.allAgentResults.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-green-600 hover:text-green-800">Agent Details</summary>
+                      <div className="mt-1 space-y-1">
+                        {multiAgentState.processingReport.allAgentResults.map((result, idx) => (
+                          <div key={idx} className={`text-xs p-1 rounded ${
+                            result.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            <div className="font-medium">{result.agent}: {result.success ? '✓' : '✗'}</div>
+                            <div>{result.wordCount} words, {result.processingTime}ms</div>
+                            {result.errors && result.errors.length > 0 && (
+                              <div className="text-red-600">{result.errors.join(', ')}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -379,9 +523,92 @@ export function DocumentItem({ doc }: { doc: Document }) {
           </Button>
         )}
         {availableMethods.hasPdf && (
-          <Button variant="secondary" size="sm" onClick={handleAdvancedIngest} disabled={isWorking || isDone} data-testid="ingest-pdf">
-            {isWorking ? 'Processing...' : isDone ? 'Ingested' : 'Ingest PDF'}
-          </Button>
+          <div className="flex flex-col gap-2">
+            {/* Multi-agent mode toggle - only show for PDFs */}
+            <div className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                id={`multi-agent-${doc.identifier}`}
+                checked={multiAgentState.mode === 'multi'}
+                onChange={(e) => {
+                  setMultiAgentState(prev => ({
+                    ...prev,
+                    mode: e.target.checked ? 'multi' : 'single'
+                  }));
+                  if (!e.target.checked) {
+                    setShowAgentConfig(false);
+                  }
+                }}
+                disabled={isWorking || isDone}
+                className="w-3 h-3"
+              />
+              <label htmlFor={`multi-agent-${doc.identifier}`} className="text-muted-foreground cursor-pointer">
+                Multi-Agent
+              </label>
+            </div>
+            
+            {/* Agent configuration - only show when multi-agent mode is enabled */}
+            {multiAgentState.mode === 'multi' && (
+              <div className="text-xs border rounded p-2 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-gray-700">Agent Selection</span>
+                  <button
+                    onClick={() => setShowAgentConfig(!showAgentConfig)}
+                    className="text-blue-600 hover:text-blue-800"
+                    disabled={isWorking || isDone}
+                  >
+                    {showAgentConfig ? 'Hide' : 'Configure'}
+                  </button>
+                </div>
+                
+                {showAgentConfig && (
+                  <div className="space-y-2">
+                    {Object.entries(multiAgentState.agentConfig).map(([agentName, config]) => (
+                      <div key={agentName} className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          id={`agent-${agentName}-${doc.identifier}`}
+                          checked={config.enabled}
+                          onChange={() => toggleAgent(agentName as keyof AgentConfig)}
+                          disabled={isWorking || isDone}
+                          className="w-3 h-3 mt-0.5"
+                        />
+                        <div className="flex-1">
+                          <label 
+                            htmlFor={`agent-${agentName}-${doc.identifier}`} 
+                            className="font-medium capitalize cursor-pointer"
+                          >
+                            {agentName}
+                          </label>
+                          <div className="text-gray-600 text-xs">{config.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-xs text-gray-500 mt-2">
+                      {getEnabledAgentsCount()} of 3 agents enabled
+                    </div>
+                  </div>
+                )}
+                
+                {!showAgentConfig && (
+                  <div className="text-gray-600">
+                    {getEnabledAgentsCount()} agents enabled
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={handleAdvancedIngest} 
+              disabled={isWorking || isDone || (multiAgentState.mode === 'multi' && getEnabledAgentsCount() === 0)} 
+              data-testid="ingest-pdf"
+            >
+              {isWorking ? 'Processing...' : isDone ? 'Ingested' : 
+               multiAgentState.mode === 'multi' ? 'Multi-Agent PDF' : 'Ingest PDF'}
+            </Button>
+          </div>
         )}
         {!availableMethods.hasSimpleText && !availableMethods.hasPdf && (
            <QualityTag text="No Content" color="bg-gray-200 text-gray-700" />

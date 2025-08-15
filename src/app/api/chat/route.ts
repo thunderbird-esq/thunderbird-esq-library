@@ -1,6 +1,7 @@
 // src/app/api/chat/route.ts
 import { HfInference } from '@huggingface/inference';
-import { createClient } from '@/lib/supabase/server';
+// --- CHANGE 1: Import the admin client ---
+import { createClient } from '@supabase/supabase-js';
 import * as ai from '@/lib/ai/huggingface';
 
 export const runtime = 'edge'; // Use the Vercel Edge Runtime for best performance
@@ -12,8 +13,14 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
     const lastUserMessage = messages[messages.length - 1]?.content || '';
 
+    // --- CHANGE 2: Create a Supabase admin client ---
+    // This client uses the service role key to bypass RLS for this trusted server-side operation.
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     // RAG: Get context from Supabase
-    const supabase = await createClient();
     const questionEmbedding = await ai.embed(lastUserMessage);
     const { data: documents } = await supabase.rpc('match_documents', {
       query_embedding: questionEmbedding,
@@ -24,17 +31,25 @@ export async function POST(req: Request) {
     // Type for document from Supabase match_documents function
     interface Document {
       content: string;
+      title: string;
     }
     
     const context = documents && documents.length > 0
-      ? documents.map((doc: Document) => `- ${doc.content.trim()}`).join('\n\n')
+      ? documents.map((doc: Document) => `Source: ${doc.title}\nContent: ${doc.content.trim()}`).join('\n\n---\n\n')
       : "No relevant context found.";
-
+      
     // Format messages for conversational task
     const conversationMessages = [
       {
         role: 'system' as const,
-        content: `You are a helpful AI assistant. Answer questions based *only* on the provided context. If the context does not contain the answer, state that you cannot answer based on the provided information.`
+        content: `You are a scrupulous and transparent research analyst. Your mission is to provide trustworthy, verifiable answers based exclusively on the provided source documents. You must show your work.
+
+Follow these rules with no exceptions:
+1. Analyze the Context: First, silently review the provided context to understand the connections between the documents.
+2. Synthesize the Answer: Formulate a direct answer to the user's question. For every assertion or piece of information you state, you MUST include an inline citation that looks like this: [n].
+3. Explain Your Reasoning: After the answer, add a "Reasoning" section. Here, you will explain how you connected the cited sources to arrive at your conclusion. This should be a brief, conversational explanation of your thought process.
+4. Create a Bibliography: After the reasoning, add a "Bibliography" section. List each citation number from your answer. For each number, provide the exact quote from the source document that supports the assertion, followed by the title of the source document it came from.
+5. Strictly Adhere to Sources: Do not use any information not present in the provided context. If the answer cannot be found, you must respond ONLY with the sentence: "I cannot answer this question as the provided documents do not contain the necessary information."`
       },
       {
         role: 'user' as const,
@@ -44,9 +59,9 @@ export async function POST(req: Request) {
 
     // Create chat completion stream using the conversational task
     const stream = hf.chatCompletionStream({
-      model: 'mistralai/Mistral-7B-Instruct-v0.2',
+      model: 'HuggingFaceH4/zephyr-7b-beta',
       messages: conversationMessages,
-      max_tokens: 500,
+      max_tokens: 1024,
       temperature: 0.1
     });
 

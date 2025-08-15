@@ -104,9 +104,9 @@ export class SynthesisAgent {
     const secondScore = scores[1];
     const scoreDifference = topScore.totalScore - secondScore.totalScore;
 
-    // Determine if LLM coherence check is needed
+    // Determine if LLM coherence check is needed (add small epsilon for floating point comparison)
     const needsLLMCheck = this.config.llmCoherence.enabled && 
-                         scoreDifference <= this.config.scoreThreshold;
+                         scoreDifference <= (this.config.scoreThreshold + 1e-10);
 
     let selectedAgent = topScore.agent;
     let selectionReason = `Highest heuristic score (${(topScore.totalScore * 100).toFixed(1)}%)`;
@@ -130,11 +130,14 @@ export class SynthesisAgent {
       } catch (error) {
         console.warn('LLM coherence check failed, falling back to heuristic winner:', error);
         confidenceLevel = 'medium';
+        // Don't override this confidence level in the logic below
+        llmCoherenceUsed = false; // Make sure we track that LLM wasn't used
       }
     }
 
-    // Set confidence level based on score differences
-    if (!llmCoherenceUsed) {
+    // Set confidence level based on score differences only if LLM wasn't attempted or if it succeeded
+    if (!llmCoherenceUsed && !needsLLMCheck) {
+      // Standard confidence setting when LLM check wasn't needed
       if (scoreDifference < 0.05) {
         confidenceLevel = 'low';
       } else if (scoreDifference < 0.15) {
@@ -142,6 +145,9 @@ export class SynthesisAgent {
       } else {
         confidenceLevel = 'high';
       }
+    } else if (!llmCoherenceUsed && needsLLMCheck) {
+      // LLM check was needed but failed - confidence should remain 'medium' as set in catch block
+      // Don't override the confidence level that was set in the catch block
     }
 
     const selectedResult = successfulResults.find(r => r.sourceAgent === selectedAgent)!;
