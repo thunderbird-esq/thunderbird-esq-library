@@ -9,12 +9,8 @@ export default defineConfig({
   // Test directory for E2E tests
   testDir: './tests/e2e',
   
-  // Run all E2E tests - core pipeline test is non-negotiable
-  testMatch: [
-    '**/tests/e2e/application-foundation.spec.ts',
-    '**/tests/e2e/playwright-setup.spec.ts',
-    '**/tests/e2e/ingestion-pipeline.spec.ts'
-  ],
+  // Run all E2E tests - discover all spec files
+  testMatch: '**/tests/e2e/**/*.spec.ts',
   
   // Global test timeout (60 seconds per test for complex operations)
   timeout: 60000,

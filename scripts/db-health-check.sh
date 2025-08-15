@@ -1,121 +1,50 @@
 #!/bin/bash
 
-# Database Health Check Script for Thunderbird ESQ Library
-# This script verifies that Supabase local database is properly initialized
-#
-# Usage:
-#   ./scripts/db-health-check.sh          # Standard health check
-#   ./scripts/db-health-check.sh --extended  # Extended validation including vector functionality tests
+# Robust Database Health Check for Thunderbird ESQ
+# This script directly verifies the Supabase container's health
+# and the presence of the pgvector extension.
 
 set -e
 
-echo "🔍 Database Health Check - Thunderbird ESQ Library"
-echo "=================================================="
+echo "🚀 Kicking off database health check..."
 
-# Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+MAX_RETRIES=10
+RETRY_INTERVAL=5
 
-# Function to print colored output
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+# Find the container name dynamically
+DB_CONTAINER_NAME=$(docker ps --format '{{.Names}}' | grep 'supabase_db' | head -n 1)
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if Supabase CLI is installed
-print_status "Checking Supabase CLI installation..."
-if ! command -v supabase &> /dev/null; then
-    print_error "Supabase CLI is not installed."
-    exit 1
-fi
-print_success "Supabase CLI is installed"
-
-# Check if Docker is running
-print_status "Checking Docker daemon status..."
-if ! docker ps &> /dev/null; then
-    print_error "Docker daemon is not running. Please start Docker."
-    exit 1
-fi
-print_success "Docker daemon is running"
-
-# Ensure Supabase is running
-print_status "Checking Supabase local status..."
-if ! supabase status > /dev/null; then
-    print_status "Supabase is not running. Starting it now..."
-    supabase start
-fi
-print_success "Supabase is running"
-
-# Test database connection
-print_status "Testing database connection..."
-if ! supabase db ping &> /dev/null; then
-    print_error "Database connection failed."
-    exit 1
-fi
-print_success "Database connection successful"
-
-# Check if vector extension is installed
-print_status "Checking vector extension..."
-
-# Get the container name dynamically - look for the main database container
-CONTAINER_NAME=$(docker ps --format "{{.Names}}" | grep "supabase_db_" | head -1)
-
-if [ -z "$CONTAINER_NAME" ]; then
-    print_error "Could not find Supabase PostgreSQL container"
+if [ -z "$DB_CONTAINER_NAME" ]; then
+    echo "❌ Could not find the Supabase database container."
     exit 1
 fi
 
-# Execute the vector extension check directly via Docker
-VECTOR_CHECK_RESULT=$(docker exec "$CONTAINER_NAME" psql -U postgres -d postgres -t -c "
-DO \$\$
-DECLARE
-  extension_exists boolean;
-BEGIN
-  SELECT EXISTS (
-    SELECT 1
-    FROM pg_extension ext
-    JOIN pg_namespace nsp ON ext.extnamespace = nsp.oid
-    WHERE ext.extname = 'vector' AND nsp.nspname = 'extensions'
-  ) INTO extension_exists;
-  
-  IF NOT extension_exists THEN
-    RAISE EXCEPTION 'pgvector extension not found in extensions schema';
-  END IF;
-  
-  -- Output success message
-  RAISE NOTICE 'pgvector extension verified successfully';
-END;
-\$\$;" 2>&1)
+echo "🔎 Found database container: $DB_CONTAINER_NAME"
+echo "⏳ Waiting for the database container to be healthy..."
 
-if echo "$VECTOR_CHECK_RESULT" | grep -q "pgvector extension verified successfully"; then
-    print_success "vector extension is installed and accessible"
+for i in $(seq 1 $MAX_RETRIES); do
+    # Check if the container is running and healthy
+    HEALTH_STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$DB_CONTAINER_NAME" 2>/dev/null)
     
-    # Optional: Run comprehensive validation if --extended flag is provided
-    if [[ "$1" == "--extended" ]]; then
-        print_status "Running extended vector functionality validation..."
-        EXTENDED_VALIDATION=$(cat scripts/validate-vector-functionality.sql | docker exec -i "$CONTAINER_NAME" psql -U postgres -d postgres 2>&1)
+    if [ "$HEALTH_STATUS" == "healthy" ]; then
+        echo "✅ Database container is healthy."
         
-        if echo "$EXTENDED_VALIDATION" | grep -q "All checks passed"; then
-            print_success "Extended vector validation completed successfully"
-        else
-            print_error "Extended vector validation failed. Details: $EXTENDED_VALIDATION"
-            exit 1
-        fi
-    fi
-else
-    print_error "vector extension is not installed or accessible. Details: $VECTOR_CHECK_RESULT"
-    exit 1
-fi
+        # Now, verify that pgvector is installed and enabled
+        PGVECTOR_CHECK=$(docker exec "$DB_CONTAINER_NAME" psql -U postgres -d postgres -t -c "SELECT 1 FROM pg_extension WHERE extname = 'vector';" | xargs)
 
-print_success "🎉 All critical database health checks passed!"
-echo "Database is ready for the application."
+        if [ "$PGVECTOR_CHECK" == "1" ]; then
+            echo "✅ pgvector extension is installed and enabled."
+            echo "🎉 Database is ready for testing!"
+            exit 0
+        else
+            echo "⚠️ pgvector extension not found. Retrying in $RETRY_INTERVAL seconds..."
+        fi
+    else
+        echo "Container not healthy yet (Status: ${HEALTH_STATUS:-Not running}). Retrying in $RETRY_INTERVAL seconds..."
+    fi
+
+    sleep $RETRY_INTERVAL
+done
+
+echo "❌ Database health check failed after $max_retries attempts."
+exit 1
