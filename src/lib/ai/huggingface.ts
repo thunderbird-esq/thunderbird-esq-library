@@ -40,59 +40,43 @@ export async function chat(prompt: string): Promise<string> {
   return content;
 }
 
+import { withResilience } from '@/lib/resilience';
+
 /**
  * A wrapper for the Hugging Face feature extraction (embedding) API.
- * Throws an error if the API call fails or returns an invalid embedding.
+ * It uses a resilience wrapper to handle retries, exponential backoff, and fallback models.
  * @param text The text to embed.
  * @returns An array of numbers representing the vector embedding.
  */
 export async function embed(text: string): Promise<number[]> {
   const modelsToTry = [AI_CONFIG.embeddingModel, ...AI_CONFIG.fallbackEmbeddingModels];
-  
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const model = modelsToTry[i];
-    try {
-      console.log(`Attempting to embed text (${text.length} chars) using model: ${model} (attempt ${i + 1}/${modelsToTry.length})`);
-      
-      const embeddingResponse = await hf.featureExtraction({
-        model: model,
-        inputs: text,
-      });
 
-      if (!Array.isArray(embeddingResponse) || embeddingResponse.length === 0) {
-        console.error('Invalid embedding response:', embeddingResponse);
-        throw new Error('Hugging Face API returned an invalid embedding.');
-      }
-      
-      console.log(`✅ Successfully generated embedding with ${embeddingResponse.length} dimensions using ${model}`);
-      return embeddingResponse as number[];
-      
-    } catch (error) {
-      console.error(`Model ${model} failed:`, error);
-      
-      // If this is the last model, provide detailed error info
-      if (i === modelsToTry.length - 1) {
-        console.error('All embedding models failed');
-        
-        if (error instanceof Error) {
-          if (error.message.includes('blob')) {
-            throw new Error(`Hugging Face API error (blob fetch failed): ${error.message}. This may be due to an invalid API key, rate limiting, or model unavailability. Tried ${modelsToTry.length} different models.`);
-          } else if (error.message.includes('401')) {
-            throw new Error('Hugging Face API authentication failed. Please check your HUGGING_FACE_API_KEY.');
-          } else if (error.message.includes('429')) {
-            throw new Error('Hugging Face API rate limit exceeded. Please wait and try again.');
-          } else if (error.message.includes('503') || error.message.includes('502')) {
-            throw new Error('Hugging Face API is temporarily unavailable. Please try again later.');
-          }
-        }
-        
-        throw new Error(`All embedding models failed. Last error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-      
-      // Continue to next model
-      console.log(`Trying next model: ${modelsToTry[i + 1]}`);
+  const operation = async (model: string) => {
+    console.log(`Attempting to embed text (${text.length} chars) using model: ${model}`);
+
+    const embeddingResponse = await hf.featureExtraction({
+      model: model,
+      inputs: text,
+    });
+
+    if (!Array.isArray(embeddingResponse) || embeddingResponse.length === 0) {
+      console.error('Invalid embedding response:', embeddingResponse);
+      throw new Error('Hugging Face API returned an invalid embedding.');
     }
-  }
-  
-  throw new Error('Unexpected error: should not reach here');
+
+    console.log(`✅ Successfully generated embedding with ${embeddingResponse.length} dimensions using ${model}`);
+    return embeddingResponse as number[];
+  };
+
+  return withResilience(operation, {
+    strategies: modelsToTry,
+    retryableStatusCodes: [429, 500, 502, 503, 504],
+    isRetryable: (error: Error) => {
+        // The HF library sometimes throws a generic error for blob fetches, which can hide the underlying cause (like rate limiting)
+        if (error.message.includes('blob')) {
+            return true;
+        }
+        return [429, 500, 502, 503, 504].some(code => error.message.includes(String(code)));
+    }
+  });
 }
