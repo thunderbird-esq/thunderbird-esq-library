@@ -234,6 +234,13 @@ jobs:
             exit 1
           fi
           
+          # RUTHLESS GATEKEEPER: Zero tolerance for skipped tests
+          if [ "$SKIPPED_TESTS" -gt "0" ]; then
+            echo "❌ CRITICAL FAILURE: $SKIPPED_TESTS test(s) were skipped"
+            echo "Skipping tests is not permitted in this pipeline."
+            exit 1
+          fi
+
           echo "✅ TEST GATEKEEPER PASSED: $EXECUTED_TESTS/$TOTAL_TESTS tests executed successfully ($EXECUTION_PERCENTAGE% execution rate)"
 
       - name: Verify test execution artifacts and evidence
