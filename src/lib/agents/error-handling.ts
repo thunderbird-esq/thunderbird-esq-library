@@ -213,6 +213,8 @@ export class AgentErrorHandler {
       case 'PASSWORD_PROTECTED':
       case 'CORRUPTED_FILE':
       case 'RESOURCE_ERROR':
+      case 'AUTH_ERROR':
+      case 'VALIDATION_ERROR':
         return new AgentValidationError(context.agent, errorInfo.userMessage);
 
       case 'NETWORK_ERROR':

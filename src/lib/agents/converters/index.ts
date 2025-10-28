@@ -23,24 +23,25 @@ export class AgentError extends Error {
   }
 }
 
-export class AgentTimeoutError extends AgentError {
+export class AgentProcessingError extends AgentError {
+  constructor(agent: string, message: string, recoverable: boolean = true) {
+    super(message, agent, 'PROCESSING_ERROR', recoverable);
+    this.name = 'AgentProcessingError';
+  }
+}
+
+export class AgentTimeoutError extends AgentProcessingError {
   constructor(agent: string, timeoutMs: number) {
-    super(`${agent} agent timeout after ${timeoutMs}ms`, agent, 'TIMEOUT', true);
+    super(agent, `Agent ${agent} timed out after ${timeoutMs}ms`, true);
     this.name = 'AgentTimeoutError';
+    this.code = 'TIMEOUT_ERROR';
   }
 }
 
 export class AgentValidationError extends AgentError {
   constructor(agent: string, message: string) {
-    super(message, agent, 'VALIDATION', false);
+    super(message, agent, 'VALIDATION_ERROR', false);
     this.name = 'AgentValidationError';
-  }
-}
-
-export class AgentProcessingError extends AgentError {
-  constructor(agent: string, message: string, recoverable: boolean = true) {
-    super(message, agent, 'PROCESSING', recoverable);
-    this.name = 'AgentProcessingError';
   }
 }
 
